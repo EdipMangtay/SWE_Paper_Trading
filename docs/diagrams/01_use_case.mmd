@@ -1,0 +1,49 @@
+graph TB
+    classDef actor fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef usecase fill:#111827,stroke:#3B82F6,stroke-width:1.5px,color:#fff
+    classDef admin fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+
+    Trader((Trader)):::actor
+    Admin((Admin)):::admin
+
+    subgraph PaperTradingSystem [Paper Trading Sistemi]
+        UC1[Hesap Olustur]:::usecase
+        UC2[Giris Yap]:::usecase
+        UC3[Piyasayi Goruntule]:::usecase
+        UC4[Market Order Ver - BUY]:::usecase
+        UC5[Market Order Ver - SELL]:::usecase
+        UC6[Limit Order Ver]:::usecase
+        UC7[Emir Iptal Et]:::usecase
+        UC8[Portfoyu Goruntule]:::usecase
+        UC9[Islem Gecmisi]:::usecase
+        UC10[Liderlik Tablosu]:::usecase
+        UC11[Profil Yonet]:::usecase
+        UC12[Kullanici Yonetimi]:::usecase
+        UC13[Platform Istatistikleri]:::usecase
+        UC14[Kullanici Devre Disi Birak]:::usecase
+    end
+
+    Trader --- UC1
+    Trader --- UC2
+    Trader --- UC3
+    Trader --- UC4
+    Trader --- UC5
+    Trader --- UC6
+    Trader --- UC7
+    Trader --- UC8
+    Trader --- UC9
+    Trader --- UC10
+    Trader --- UC11
+
+    Admin --- UC2
+    Admin --- UC10
+    Admin --- UC12
+    Admin --- UC13
+    Admin --- UC14
+
+    UC4 -.includes.-> UC2
+    UC5 -.includes.-> UC2
+    UC6 -.includes.-> UC2
+    UC7 -.includes.-> UC2
+    UC8 -.includes.-> UC2
+    UC11 -.includes.-> UC2

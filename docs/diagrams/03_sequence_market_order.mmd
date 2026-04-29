@@ -1,0 +1,55 @@
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend (React)
+    participant API as Order Controller
+    participant OS as OrderService
+    participant MD as MarketDataService
+    participant CG as CoinGecko API
+    participant UR as UserRepository
+    participant PR as PortfolioRepository
+    participant TR as TransactionRepository
+    participant DB as MongoDB
+
+    U->>FE: Click "AL" (Market BUY)
+    FE->>API: POST /api/orders {coinId, type:MARKET, side:BUY, quantity}
+    API->>API: validate input + JWT
+    API->>OS: createOrder(userId, payload)
+
+    OS->>MD: getCoin(coinId)
+    alt cache miss
+        MD->>CG: GET /coins/:id
+        CG-->>MD: price data
+        MD->>MD: cache.set(60s)
+    end
+    MD-->>OS: {current_price, symbol, name}
+
+    OS->>DB: Order.create(status=PENDING)
+    OS->>OS: _executeOrder(order, livePrice)
+
+    OS->>UR: findById(userId)
+    UR->>DB: User.findById
+    DB-->>UR: user
+    UR-->>OS: user
+
+    OS->>OS: check cashBalance >= total
+
+    alt insufficient funds
+        OS->>DB: Order.update(status=CANCELLED)
+        OS-->>API: throw 400 "Insufficient cash"
+        API-->>FE: 400 error
+    else sufficient
+        OS->>UR: updateBalance(userId, cash - total)
+        UR->>DB: User.update
+        OS->>PR: findOrCreate(userId)
+        PR-->>OS: portfolio
+        OS->>OS: merge or add asset (weighted avg)
+        OS->>PR: save(portfolio)
+        PR->>DB: Portfolio.save
+        OS->>DB: Order.update(status=FILLED, executedPrice, filledAt)
+        OS->>TR: create({user, order, side, qty, price, total})
+        TR->>DB: Transaction.insert
+        OS-->>API: filled order
+        API-->>FE: 201 {order}
+        FE-->>U: "Emir gerceklesti"
+    end

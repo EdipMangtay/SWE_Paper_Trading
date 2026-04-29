@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>Paper Trading - UML Diyagramları (4+1 View Model)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  :root {
+    --bg: #0A0E1A;
+    --card: #111827;
+    --border: rgba(255,255,255,0.08);
+    --text: #ffffff;
+    --muted: rgba(255,255,255,0.6);
+    --accent: #10B981;
+    --gold: #F59E0B;
+    --blue: #3B82F6;
+    --red: #EF4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 70%),
+      radial-gradient(ellipse 80% 50% at 100% 100%, rgba(16, 185, 129, 0.08), transparent 70%);
+    background-attachment: fixed;
+    line-height: 1.6;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 48px 24px; }
+  header { text-align: center; margin-bottom: 64px; }
+  header h1 {
+    font-size: 2.5rem;
+    margin: 0 0 8px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); margin: 0; }
+  .meta { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 999px; background: rgba(16,185,129,0.1); color: var(--accent); border: 1px solid rgba(16,185,129,0.3); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; font-family: monospace; }
+
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 48px;
+  }
+  .toc h2 { margin: 0 0 16px; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .toc ol { margin: 0; padding-left: 20px; columns: 2; column-gap: 32px; }
+  .toc li { padding: 4px 0; }
+  .toc a { color: var(--text); text-decoration: none; transition: color 0.2s; }
+  .toc a:hover { color: var(--accent); }
+
+  .view-section { margin: 64px 0 32px; padding-bottom: 16px; border-bottom: 2px solid var(--accent); }
+  .view-section h2 { font-size: 1.75rem; margin: 0; }
+  .view-section p { color: var(--muted); margin: 4px 0 0; }
+
+  .diagram-block {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin: 32px 0;
+    overflow: hidden;
+  }
+  .diagram-block h3 { margin: 0 0 4px; font-size: 1.25rem; }
+  .diagram-block .desc { color: var(--muted); font-size: 0.9rem; margin: 0 0 20px; }
+  .mermaid {
+    background: rgba(255,255,255,0.02);
+    border-radius: 12px;
+    padding: 24px;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .mermaid svg { max-width: 100%; height: auto; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .legend span {
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    font-family: monospace;
+  }
+
+  footer { text-align: center; padding: 48px 24px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 64px; }
+  footer code { background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+
+  @media (max-width: 768px) {
+    .toc ol { columns: 1; }
+    header h1 { font-size: 1.75rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <span class="meta">SAD v2 · Software Architecture Document</span>
+    <h1>Paper Trading <span>UML</span> Diyagramları</h1>
+    <p>Sanal Borsa Simülasyonu · 4+1 View Model · Layered Architecture</p>
+  </header>
+
+  <nav class="toc">
+    <h2>İçindekiler</h2>
+    <ol>
+      <li><a href="#use-case">Use Case Diagram</a></li>
+      <li><a href="#class">Class Diagram</a></li>
+      <li><a href="#seq-market">Sequence — Market Order</a></li>
+      <li><a href="#seq-limit">Sequence — Limit Order</a></li>
+      <li><a href="#seq-portfolio">Sequence — Portfolio Valuation</a></li>
+      <li><a href="#activity">Activity Diagram</a></li>
+      <li><a href="#state">State Machine — Order Lifecycle</a></li>
+      <li><a href="#component">Component Diagram</a></li>
+      <li><a href="#deployment">Deployment Diagram</a></li>
+      <li><a href="#package">Package Diagram</a></li>
+    </ol>
+  </nav>
+
+  <!-- USE CASE VIEW -->
+  <section class="view-section">
+    <h2>1. Use Case View (Senaryo Görünümü)</h2>
+    <p>Sistemin fonksiyonel gereksinimleri ve aktör etkileşimleri</p>
+  </section>
+
+  <article class="diagram-block" id="use-case">
+    <h3>1.1 Use Case Diagram</h3>
+    <p class="desc">Trader ve Admin aktörlerinin sistemle etkileşimleri</p>
+    <div class="mermaid">
+graph TB
+    classDef actor fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef usecase fill:#111827,stroke:#3B82F6,stroke-width:1.5px,color:#fff
+    classDef admin fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+
+    Trader((Trader)):::actor
+    Admin((Admin)):::admin
+
+    subgraph Sys [Paper Trading Sistemi]
+        UC1[Hesap Olustur]:::usecase
+        UC2[Giris Yap]:::usecase
+        UC3[Piyasayi Goruntule]:::usecase
+        UC4[Market Order BUY]:::usecase
+        UC5[Market Order SELL]:::usecase
+        UC6[Limit Order Ver]:::usecase
+        UC7[Emir Iptal Et]:::usecase
+        UC8[Portfoyu Goruntule]:::usecase
+        UC9[Islem Gecmisi]:::usecase
+        UC10[Liderlik Tablosu]:::usecase
+        UC11[Profil Yonet]:::usecase
+        UC12[Kullanici Yonetimi]:::usecase
+        UC13[Platform Istatistikleri]:::usecase
+        UC14[Kullanici Devre Disi Birak]:::usecase
+    end
+
+    Trader --- UC1
+    Trader --- UC2
+    Trader --- UC3
+    Trader --- UC4
+    Trader --- UC5
+    Trader --- UC6
+    Trader --- UC7
+    Trader --- UC8
+    Trader --- UC9
+    Trader --- UC10
+    Trader --- UC11
+    Admin --- UC2
+    Admin --- UC10
+    Admin --- UC12
+    Admin --- UC13
+    Admin --- UC14
+    UC4 -.includes.-> UC2
+    UC5 -.includes.-> UC2
+    UC6 -.includes.-> UC2
+    UC7 -.includes.-> UC2
+    UC8 -.includes.-> UC2
+    UC11 -.includes.-> UC2
+    </div>
+  </article>
+
+  <!-- LOGICAL VIEW -->
+  <section class="view-section">
+    <h2>2. Logical View (Mantıksal Görünüm)</h2>
+    <p>Sistemin yapısal organizasyonu ve sınıf ilişkileri</p>
+  </section>
+
+  <article class="diagram-block" id="class">
+    <h3>2.1 Class Diagram</h3>
+    <p class="desc">Domain modelleri ve aralarındaki ilişkiler</p>
+    <div class="mermaid">
+classDiagram
+    direction LR
+    class User {
+        +ObjectId _id
+        +String email
+        +String username
+        +String password
+        +String role
+        +Number cashBalance
+        +Boolean isActive
+        +comparePassword(c) Boolean
+        +toJSON() Object
+    }
+    class Portfolio {
+        +ObjectId _id
+        +ObjectId user
+        +Asset[] assets
+    }
+    class Asset {
+        <<embedded>>
+        +String symbol
+        +String coinId
+        +String name
+        +Number quantity
+        +Number avgBuyPrice
+    }
+    class Order {
+        +ObjectId _id
+        +ObjectId user
+        +String symbol
+        +String coinId
+        +String type
+        +String side
+        +Number quantity
+        +Number price
+        +Number executedPrice
+        +String status
+        +Date filledAt
+        +Date cancelledAt
+        +Date expiresAt
+    }
+    class Transaction {
+        +ObjectId _id
+        +ObjectId user
+        +ObjectId order
+        +String symbol
+        +String side
+        +Number quantity
+        +Number price
+        +Number total
+        +Number fee
+    }
+    class MarketData {
+        <<external>>
+        +String id
+        +String symbol
+        +Number current_price
+        +Number price_change_24h
+    }
+    User "1" --o "1" Portfolio : has
+    Portfolio "1" --* "*" Asset : contains
+    User "1" --o "*" Order : places
+    User "1" --o "*" Transaction : owns
+    Order "1" --o "0..1" Transaction : produces
+    Asset ..> MarketData : valued by
+    Order ..> MarketData : priced by
+    </div>
+  </article>
+
+  <!-- PROCESS VIEW -->
+  <section class="view-section">
+    <h2>3. Process View (Süreç Görünümü)</h2>
+    <p>Sistemin davranışsal yönleri ve iş akışları</p>
+  </section>
+
+  <article class="diagram-block" id="seq-market">
+    <h3>3.1 Sequence Diagram — Market Order Akışı</h3>
+    <p class="desc">Bir Market BUY emrinin uçtan uca işlenme süreci</p>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend
+    participant API as OrderController
+    participant OS as OrderService
+    participant MD as MarketDataService
+    participant CG as CoinGecko
+    participant UR as UserRepo
+    participant PR as PortfolioRepo
+    participant TR as TransactionRepo
+    participant DB as MongoDB
+
+    U->>FE: AL butonu (Market BUY)
+    FE->>API: POST /api/orders
+    API->>API: validate + JWT
+    API->>OS: createOrder(userId, payload)
+    OS->>MD: getCoin(coinId)
+    alt cache miss
+        MD->>CG: GET /coins/:id
+        CG-->>MD: price data
+        MD->>MD: cache.set(60s)
+    end
+    MD-->>OS: current_price
+    OS->>DB: Order.create(PENDING)
+    OS->>OS: _executeOrder()
+    OS->>UR: findById(userId)
+    UR->>DB: User.findById
+    DB-->>UR: user
+    OS->>OS: cashBalance >= total ?
+    alt insufficient funds
+        OS->>DB: Order.update(CANCELLED)
+        OS-->>API: 400 error
+    else sufficient
+        OS->>UR: updateBalance(cash - total)
+        OS->>PR: findOrCreate / save
+        OS->>DB: Order.update(FILLED)
+        OS->>TR: create Transaction
+        OS-->>API: filled order
+        API-->>FE: 201 {order}
+        FE-->>U: Basariyla gerceklesti
+    end
+    </div>
+  </article>
+
+  <article class="diagram-block" id="seq-limit">
+    <h3>3.2 Sequence Diagram — Limit Order Akışı</h3>
+    <p class="desc">Limit emir oluşturma + arka plan worker ile eşleştirme</p>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend
+    participant API as OrderController
+    participant OS as OrderService
+    participant MD as MarketData
+    participant DB as MongoDB
+    participant W as LimitWorker (30s)
+
+    Note over U,FE: Faz 1 - Emir Yerleştirme
+    U->>FE: LIMIT BUY @ $60000
+    FE->>API: POST /api/orders
+    API->>OS: createOrder
+    OS->>MD: getCoin(coinId)
+    MD-->>OS: market = $65000
+    OS->>OS: shouldFill(BUY, 60000, 65000) - false
+    OS->>DB: Order.create(PENDING)
+    OS-->>API: pending order
+    API-->>FE: 201 {PENDING}
+
+    Note over W,DB: Faz 2 - Arka Plan Eslestirme
+    loop her 30 saniye
+        W->>OS: processPendingLimitOrders()
+        OS->>DB: find pending limit orders
+        OS->>MD: getPriceMap(ids)
+        MD-->>OS: {bitcoin: 59800}
+        loop her order icin
+            alt expired
+                OS->>DB: Order.update(EXPIRED)
+            else shouldFill == true
+                OS->>OS: _executeOrder
+                OS->>DB: Order.update(FILLED)
+            else not yet
+                Note over OS: skip
+            end
+        end
+    end
+
+    Note over U,FE: Faz 3 - Kullanici sorgular
+    U->>FE: /orders sayfasi
+    FE->>API: GET /api/orders
+    API-->>FE: orders FILLED
+    </div>
+  </article>
+
+  <article class="diagram-block" id="seq-portfolio">
+    <h3>3.3 Sequence Diagram — Portfolio Valuation</h3>
+    <p class="desc">Portföy değerinin canlı fiyatlarla mark-to-market hesaplanması</p>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend
+    participant API as PortfolioController
+    participant PS as PortfolioService
+    participant UR as UserRepo
+    participant PR as PortfolioRepo
+    participant MD as MarketData
+    participant CG as CoinGecko
+    participant DB as MongoDB
+
+    U->>FE: /portfolio
+    FE->>API: GET /api/portfolio (JWT)
+    API->>API: authenticate
+    API->>PS: getPortfolio(userId)
+    PS->>UR: findById
+    UR->>DB: User.findById
+    DB-->>UR: user
+    PS->>PR: findOrCreate
+    PR->>DB: Portfolio.findOne
+    DB-->>PR: portfolio
+    PS->>PS: extract coinIds
+    PS->>MD: getPriceMap(ids)
+    alt cache hit
+        MD-->>PS: priceMap
+    else cache miss
+        MD->>CG: GET /simple/price
+        CG-->>MD: prices
+        MD->>MD: cache.set(30s)
+    end
+    loop her asset
+        PS->>PS: value = qty * price
+        PS->>PS: pnl = value - cost
+    end
+    PS-->>API: {totalValue, holdings[]}
+    API-->>FE: 200 JSON
+    FE-->>U: KPI + tablo
+    </div>
+  </article>
+
+  <article class="diagram-block" id="activity">
+    <h3>3.4 Activity Diagram — Tam Trading Döngüsü</h3>
+    <p class="desc">Kullanıcının login'den emir gerçekleşmesine kadar süreç</p>
+    <div class="mermaid">
+flowchart TD
+    Start([Baslangic]) --> Login{Giris yapildi mi?}
+    Login -->|Hayir| Register[Kayit / Giris]
+    Register --> Auth[JWT Token]
+    Auth --> Dashboard
+    Login -->|Evet| Dashboard[Dashboard]
+    Dashboard --> Browse[Piyasayi Tara]
+    Browse --> Pick{Coin sec}
+    Pick --> Detail[Detay grafik]
+    Detail --> Decide{Islem?}
+    Decide -->|Hayir| Browse
+    Decide -->|Evet| Side{Yon}
+    Side -->|BUY| TypeB{Tip}
+    Side -->|SELL| TypeS{Tip}
+    TypeB -->|MARKET| MB[Market BUY]
+    TypeB -->|LIMIT| LB[Limit BUY]
+    TypeS -->|MARKET| MS[Market SELL]
+    TypeS -->|LIMIT| LS[Limit SELL]
+    MB --> VB{Bakiye yeterli?}
+    MS --> VS{Varlik yeterli?}
+    VB -->|Hayir| EB[Hata]
+    VB -->|Evet| EXB[Anlik AL]
+    VS -->|Hayir| ES[Hata]
+    VS -->|Evet| EXS[Anlik SAT]
+    LB --> SP[PENDING kaydet]
+    LS --> SP
+    SP --> Wait[Worker bekliyor]
+    Wait --> CP{Hedef fiyat?}
+    CP -->|Hayir| Wait
+    CP -->|Evet| EXL[Otomatik gerceklestir]
+    EXB --> UP[Portfoy guncelle]
+    EXS --> UP
+    EXL --> UP
+    UP --> RT[Transaction kaydet]
+    RT --> Show[Sonuc goster]
+    Show --> End([Bitis])
+    EB --> Browse
+    ES --> Browse
+
+    style Start fill:#10B981,color:#000
+    style End fill:#EF4444,color:#fff
+    style EXB fill:#10B981,color:#000
+    style EXS fill:#10B981,color:#000
+    style EXL fill:#10B981,color:#000
+    style EB fill:#EF4444,color:#fff
+    style ES fill:#EF4444,color:#fff
+    </div>
+  </article>
+
+  <article class="diagram-block" id="state">
+    <h3>3.5 State Machine — Order Lifecycle</h3>
+    <p class="desc">Bir emrin geçirebileceği tüm durumlar ve geçişler</p>
+    <div class="mermaid">
+stateDiagram-v2
+    direction LR
+    [*] --> PENDING : createOrder()
+    PENDING --> FILLED : MARKET (anlik)
+    PENDING --> FILLED : LIMIT shouldFill==true
+    PENDING --> CANCELLED : user cancels
+    PENDING --> CANCELLED : insufficient funds
+    PENDING --> EXPIRED : expiresAt passed
+    FILLED --> [*] : Transaction created
+    CANCELLED --> [*] : cancelledAt set
+    EXPIRED --> [*] : status only
+    </div>
+    <div class="legend">
+      <span style="color:var(--gold);border-color:var(--gold);">PENDING</span>
+      <span style="color:var(--accent);border-color:var(--accent);">FILLED</span>
+      <span style="color:var(--red);border-color:var(--red);">CANCELLED</span>
+      <span style="color:var(--muted);border-color:var(--border);">EXPIRED</span>
+    </div>
+  </article>
+
+  <!-- DEVELOPMENT VIEW -->
+  <section class="view-section">
+    <h2>4. Development View (Geliştirme Görünümü)</h2>
+    <p>Kaynak kodun organizasyonu ve modül bağımlılıkları</p>
+  </section>
+
+  <article class="diagram-block" id="component">
+    <h3>4.1 Component Diagram</h3>
+    <p class="desc">Layered architecture: Presentation → Application → Business → Data Access</p>
+    <div class="mermaid">
+graph TB
+    classDef pl fill:#1F2937,stroke:#3B82F6,stroke-width:2px,color:#fff
+    classDef al fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef bl fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+    classDef dl fill:#1F2937,stroke:#EF4444,stroke-width:2px,color:#fff
+    classDef ext fill:#374151,stroke:#9CA3AF,color:#fff,stroke-dasharray:5 5
+
+    subgraph PL [Presentation Layer - React]
+        Pages[Pages]:::pl
+        Comps[Components]:::pl
+        Ctx[AuthContext]:::pl
+        ApiC[api.js]:::pl
+    end
+
+    subgraph AL [Application Layer - Express]
+        Auth[authController]:::al
+        Market[marketController]:::al
+        Order[orderController]:::al
+        Pf[portfolioController]:::al
+        Lb[leaderboardController]:::al
+        Ad[adminController]:::al
+        MW[Middleware]:::al
+    end
+
+    subgraph BL [Business Logic Layer]
+        AS[authService]:::bl
+        MS[marketDataService]:::bl
+        OS[orderService]:::bl
+        PS[portfolioService]:::bl
+        LS[leaderboardService]:::bl
+        Worker[LimitWorker]:::bl
+    end
+
+    subgraph DL [Data Access Layer]
+        UR[userRepo]:::dl
+        OR[orderRepo]:::dl
+        PR[portfolioRepo]:::dl
+        TR[transactionRepo]:::dl
+        Models[Mongoose Models]:::dl
+    end
+
+    Mongo[(MongoDB)]:::ext
+    CG[CoinGecko API]:::ext
+
+    Pages --> ApiC
+    ApiC -.HTTP+JWT.-> Auth
+    ApiC -.HTTP.-> Market
+    ApiC -.HTTP+JWT.-> Order
+    ApiC -.HTTP+JWT.-> Pf
+    ApiC -.HTTP.-> Lb
+    ApiC -.HTTP+JWT.-> Ad
+    Auth --> AS
+    Market --> MS
+    Order --> OS
+    Pf --> PS
+    Lb --> LS
+    Ad --> UR
+    AS --> UR
+    AS --> PR
+    OS --> OR
+    OS --> PR
+    OS --> UR
+    OS --> TR
+    OS --> MS
+    PS --> UR
+    PS --> PR
+    PS --> TR
+    PS --> MS
+    LS --> PR
+    LS --> MS
+    Worker --> OS
+    UR --> Models
+    OR --> Models
+    PR --> Models
+    TR --> Models
+    Models -.Mongoose.-> Mongo
+    MS -.HTTPS.-> CG
+    </div>
+  </article>
+
+  <article class="diagram-block" id="package">
+    <h3>4.2 Package Diagram</h3>
+    <p class="desc">Klasör hiyerarşisi ve paket bağımlılıkları</p>
+    <div class="mermaid">
+graph TB
+    classDef pkg fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef sub fill:#111827,stroke:#3B82F6,color:#fff
+
+    subgraph BE [backend/src/]
+        Cfg[config]:::sub
+        Mod[models]:::sub
+        Repo[repositories]:::sub
+        Svc[services]:::sub
+        Ctrl[controllers]:::sub
+        MW[middleware]:::sub
+        Rt[routes]:::sub
+        Ut[utils]:::sub
+        App[app.js + server.js]:::sub
+    end
+    subgraph FE [frontend/src/]
+        Pg[pages]:::sub
+        Cm[components]:::sub
+        Cx[context]:::sub
+        Sv[services]:::sub
+        Mn[main.jsx + App.jsx]:::sub
+    end
+    subgraph Doc [docs/]
+        Dg[diagrams]:::sub
+        SAD[SAD_v2.docx]:::sub
+    end
+
+    Ctrl --> Svc
+    Ctrl --> MW
+    Svc --> Repo
+    Svc --> Cfg
+    Repo --> Mod
+    Rt --> Ctrl
+    App --> Rt
+    App --> MW
+    App --> Cfg
+
+    Pg --> Cm
+    Pg --> Cx
+    Pg --> Sv
+    Cm --> Sv
+    Mn --> Pg
+    Mn --> Cx
+    </div>
+  </article>
+
+  <!-- DEPLOYMENT VIEW -->
+  <section class="view-section">
+    <h2>5. Deployment View (Dağıtım Görünümü) — +1</h2>
+    <p>Sistemin fiziksel dağıtımı ve harici bağımlılıklar</p>
+  </section>
+
+  <article class="diagram-block" id="deployment">
+    <h3>5.1 Deployment Diagram</h3>
+    <p class="desc">Production ortamı: Browser → Vercel CDN → Railway API → MongoDB Atlas + CoinGecko</p>
+    <div class="mermaid">
+graph TB
+    classDef client fill:#1F2937,stroke:#3B82F6,stroke-width:2px,color:#fff
+    classDef edge fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef server fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+    classDef db fill:#1F2937,stroke:#EF4444,stroke-width:2px,color:#fff
+    classDef ext fill:#374151,stroke:#9CA3AF,color:#fff,stroke-dasharray:5 5
+
+    subgraph C [Client Device]
+        Browser[Chrome/Firefox/Safari]:::client
+    end
+    subgraph CDN [Vercel CDN]
+        SPA[React SPA Build<br/>Static HTML/JS/CSS]:::edge
+    end
+    subgraph App [Railway / Render]
+        Express[Node.js + Express<br/>Port 5000<br/>JWT + REST API]:::server
+        Worker[Limit Worker<br/>setInterval 30s]:::server
+        Cache[node-cache<br/>price TTL 60s]:::server
+    end
+    subgraph DB [MongoDB Atlas]
+        Mongo[(MongoDB Cluster<br/>users, portfolios,<br/>orders, transactions)]:::db
+    end
+    subgraph EXT [External APIs]
+        CG[CoinGecko<br/>api.coingecko.com<br/>free tier]:::ext
+    end
+
+    Browser -->|HTTPS| SPA
+    Browser -->|HTTPS REST + JWT| Express
+    Express -->|MongoDB Wire / TLS| Mongo
+    Express -.->|HTTPS poll| CG
+    Worker -.->|in-process| Express
+    Express -.->|read/write| Cache
+    SPA -.->|served| Browser
+    </div>
+  </article>
+
+</div>
+
+<footer>
+  Bu sayfa <code>mermaid.js</code> ile canlı render edilir.<br/>
+  Kaynak <code>.mmd</code> dosyaları aynı klasördedir.<br/>
+  PaperTrade · Software Architecture · Layered Architecture + REST API
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      background: '#0A0E1A',
+      primaryColor: '#1F2937',
+      primaryBorderColor: '#10B981',
+      primaryTextColor: '#ffffff',
+      lineColor: '#10B981',
+      secondaryColor: '#374151',
+      tertiaryColor: '#111827',
+      fontFamily: 'Inter, system-ui, sans-serif'
+    }
+  });
+</script>
+
+</body>
+</html>

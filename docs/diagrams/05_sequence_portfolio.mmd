@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend
+    participant API as Portfolio Controller
+    participant PS as PortfolioService
+    participant UR as UserRepository
+    participant PR as PortfolioRepository
+    participant MD as MarketDataService
+    participant CG as CoinGecko API
+    participant DB as MongoDB
+
+    U->>FE: Open /portfolio
+    FE->>API: GET /api/portfolio (Bearer token)
+    API->>API: authenticate JWT
+    API->>PS: getPortfolio(userId)
+
+    PS->>UR: findById(userId)
+    UR->>DB: User.findById
+    DB-->>UR: user (cashBalance)
+    UR-->>PS: user
+
+    PS->>PR: findOrCreate(userId)
+    PR->>DB: Portfolio.findOne
+    DB-->>PR: portfolio with assets[]
+    PR-->>PS: portfolio
+
+    PS->>PS: extract coinIds from assets
+    PS->>MD: getPriceMap(coinIds)
+
+    alt cache hit
+        MD-->>PS: priceMap from cache
+    else cache miss
+        MD->>CG: GET /simple/price?ids=...
+        CG-->>MD: {bitcoin: 65000, ethereum: 3200, ...}
+        MD->>MD: cache.set(30s)
+        MD-->>PS: priceMap
+    end
+
+    loop for each asset
+        PS->>PS: value = quantity * currentPrice
+        PS->>PS: cost = quantity * avgBuyPrice
+        PS->>PS: pnl = value - cost
+        PS->>PS: pnlPct = pnl / cost * 100
+    end
+
+    PS->>PS: totalValue = cashBalance + sum(values)
+    PS->>PS: totalPnl = totalValue - INITIAL_BALANCE
+
+    PS-->>API: {cashBalance, assetsValue, totalValue, totalPnl, holdings[]}
+    API-->>FE: 200 JSON
+    FE-->>U: render KPIs + holdings table

@@ -1,0 +1,49 @@
+sequenceDiagram
+    autonumber
+    actor U as Trader
+    participant FE as Frontend
+    participant API as Order Controller
+    participant OS as OrderService
+    participant MD as MarketDataService
+    participant DB as MongoDB
+    participant W as Limit Worker (every 30s)
+
+    Note over U,FE: Phase 1 - Order Placement
+    U->>FE: Submit LIMIT BUY @ $60000
+    FE->>API: POST /api/orders {type:LIMIT, side:BUY, qty, price:60000}
+    API->>OS: createOrder()
+    OS->>MD: getCoin(coinId)
+    MD-->>OS: current_price = $65000
+    OS->>OS: shouldFill(BUY, 60000, 65000) - false
+    OS->>DB: Order.create(status=PENDING, price=60000)
+    OS-->>API: pending order
+    API-->>FE: 201 {order: PENDING}
+    FE-->>U: "Emir bekliyor"
+
+    Note over W,DB: Phase 2 - Background Matching (loop every 30s)
+    loop every 30 seconds
+        W->>OS: processPendingLimitOrders()
+        OS->>DB: find {status:PENDING, type:LIMIT}
+        DB-->>OS: pending orders[]
+
+        OS->>MD: getPriceMap(coinIds)
+        MD-->>OS: {bitcoin: 59800, ...}
+
+        loop for each pending order
+            alt expiresAt passed
+                OS->>DB: Order.update(status=EXPIRED)
+            else shouldFill(side, limit, market)
+                OS->>OS: _executeOrder(order, marketPrice)
+                Note over OS,DB: Same flow as Market order:<br/>cash--, asset++, Transaction created
+                OS->>DB: Order.update(status=FILLED)
+            else not yet
+                Note over OS: skip, check next cycle
+            end
+        end
+    end
+
+    Note over U,FE: Phase 3 - User checks status
+    U->>FE: Open Orders page
+    FE->>API: GET /api/orders
+    API-->>FE: orders[] including FILLED ones
+    FE-->>U: Order shown as FILLED with executedPrice

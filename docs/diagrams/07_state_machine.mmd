@@ -1,0 +1,38 @@
+stateDiagram-v2
+    direction LR
+
+    [*] --> PENDING : createOrder()
+
+    PENDING --> FILLED : MARKET order (anlik gerceklesme)
+    PENDING --> FILLED : LIMIT - shouldFill() == true<br/>(BUY: market <= limit) or<br/>(SELL: market >= limit)
+    PENDING --> CANCELLED : user cancels
+    PENDING --> CANCELLED : insufficient funds/asset
+    PENDING --> EXPIRED : expiresAt < now
+
+    FILLED --> [*] : Transaction created<br/>Portfolio updated<br/>Balance updated
+    CANCELLED --> [*] : cancelledAt set
+    EXPIRED --> [*] : status only update
+
+    note right of PENDING
+        Initial state for all orders.
+        MARKET orders pass through
+        instantly. LIMIT orders wait
+        for the worker to match.
+    end note
+
+    note right of FILLED
+        Terminal success state.
+        Immutable once reached.
+        Triggers Transaction record.
+    end note
+
+    note left of CANCELLED
+        Terminal state reached
+        either by user action
+        or validation failure.
+    end note
+
+    note left of EXPIRED
+        Terminal state for limit
+        orders past their TTL.
+    end note

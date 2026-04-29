@@ -1,0 +1,37 @@
+graph TB
+    classDef client fill:#1F2937,stroke:#3B82F6,stroke-width:2px,color:#fff
+    classDef edge fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef server fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+    classDef db fill:#1F2937,stroke:#EF4444,stroke-width:2px,color:#fff
+    classDef ext fill:#374151,stroke:#9CA3AF,stroke-width:1px,color:#fff,stroke-dasharray:5 5
+
+    subgraph ClientNode [Client Device - Browser]
+        Browser[Chrome / Firefox / Safari<br/>HTML + JS + CSS]:::client
+    end
+
+    subgraph CDN [Vercel Edge Network - CDN]
+        ReactApp[React SPA Build<br/>Static Files - HTML JS CSS<br/>Vite production build]:::edge
+    end
+
+    subgraph BackendNode [Application Server - Railway / Render]
+        Express[Node.js + Express.js<br/>Port 5000<br/>JWT Auth, REST API]:::server
+        Worker2[Limit Order Worker<br/>setInterval 30s]:::server
+        Cache[node-cache - in-memory<br/>price TTL 60s]:::server
+    end
+
+    subgraph DBNode [MongoDB Atlas - Cloud Database]
+        DB[(MongoDB Cluster<br/>Collections: users, portfolios,<br/>orders, transactions)]:::db
+    end
+
+    subgraph ExtNode [External APIs]
+        CG[CoinGecko API<br/>api.coingecko.com<br/>Free Tier - 10 to 30 req min]:::ext
+    end
+
+    Browser -->|HTTPS| ReactApp
+    Browser -->|HTTPS - REST + JWT| Express
+    Express -->|MongoDB Wire Protocol over TLS| DB
+    Express -.->|HTTPS - poll prices| CG
+    Worker2 -.->|in-process call| Express
+    Express -.->|read/write| Cache
+
+    ReactApp -.->|served via CDN| Browser

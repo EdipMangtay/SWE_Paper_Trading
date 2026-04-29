@@ -1,0 +1,90 @@
+graph TB
+    classDef presentation fill:#1F2937,stroke:#3B82F6,stroke-width:2px,color:#fff
+    classDef application fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef business fill:#1F2937,stroke:#F59E0B,stroke-width:2px,color:#fff
+    classDef data fill:#1F2937,stroke:#EF4444,stroke-width:2px,color:#fff
+    classDef external fill:#374151,stroke:#9CA3AF,stroke-width:1px,color:#fff,stroke-dasharray: 5 5
+
+    subgraph PL [Presentation Layer - React Frontend]
+        Pages[Pages: Dashboard, Market, Trade, Portfolio, Orders, Leaderboard, Profile, Admin]:::presentation
+        Comps[Components: Navbar, PriceChart, OrderForm, ProtectedRoute]:::presentation
+        Ctx[AuthContext - JWT in localStorage]:::presentation
+        ApiClient[api.js - Axios client + interceptors]:::presentation
+    end
+
+    subgraph AL [Application Layer - Express Controllers and Routes]
+        Auth[authController + authRoutes]:::application
+        Market[marketController + marketRoutes]:::application
+        Order[orderController + orderRoutes]:::application
+        Portfolio[portfolioController + portfolioRoutes]:::application
+        Leader[leaderboardController + leaderboardRoutes]:::application
+        Admin[adminController + adminRoutes]:::application
+        MW[Middleware: authenticate, requireAdmin, validate, errorHandler]:::application
+    end
+
+    subgraph BL [Business Logic Layer - Services]
+        AuthSvc[authService - register, login, JWT issuance]:::business
+        MarketSvc[marketDataService - cache, fetch, fallback]:::business
+        OrderSvc[orderService - validation, execution, state machine]:::business
+        PfSvc[portfolioService - mark to market, P&L]:::business
+        LbSvc[leaderboardService - ranking algorithm]:::business
+        Worker[Limit Order Worker - 30s interval]:::business
+    end
+
+    subgraph DAL [Data Access Layer - Repositories and Mongoose Models]
+        UserRepo[userRepository]:::data
+        OrderRepo[orderRepository]:::data
+        PfRepo[portfolioRepository]:::data
+        TxRepo[transactionRepository]:::data
+        Models[Mongoose Models: User, Portfolio, Order, Transaction]:::data
+    end
+
+    subgraph EXT [External]
+        Mongo[(MongoDB)]:::external
+        CG[CoinGecko API]:::external
+    end
+
+    Pages --> Comps
+    Pages --> Ctx
+    Pages --> ApiClient
+    ApiClient -.HTTP/JSON + JWT.-> Auth
+    ApiClient -.HTTP/JSON.-> Market
+    ApiClient -.HTTP/JSON + JWT.-> Order
+    ApiClient -.HTTP/JSON + JWT.-> Portfolio
+    ApiClient -.HTTP/JSON.-> Leader
+    ApiClient -.HTTP/JSON + JWT.-> Admin
+
+    Auth --> MW
+    Order --> MW
+    Portfolio --> MW
+    Admin --> MW
+
+    Auth --> AuthSvc
+    Market --> MarketSvc
+    Order --> OrderSvc
+    Portfolio --> PfSvc
+    Leader --> LbSvc
+    Admin --> UserRepo
+
+    AuthSvc --> UserRepo
+    AuthSvc --> PfRepo
+    OrderSvc --> OrderRepo
+    OrderSvc --> PfRepo
+    OrderSvc --> UserRepo
+    OrderSvc --> TxRepo
+    OrderSvc --> MarketSvc
+    PfSvc --> UserRepo
+    PfSvc --> PfRepo
+    PfSvc --> TxRepo
+    PfSvc --> MarketSvc
+    LbSvc --> PfRepo
+    LbSvc --> MarketSvc
+    Worker --> OrderSvc
+
+    UserRepo --> Models
+    OrderRepo --> Models
+    PfRepo --> Models
+    TxRepo --> Models
+    Models -.Mongoose.-> Mongo
+
+    MarketSvc -.HTTPS.-> CG

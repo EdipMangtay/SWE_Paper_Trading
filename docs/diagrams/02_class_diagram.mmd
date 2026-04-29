@@ -1,0 +1,84 @@
+classDiagram
+    direction LR
+
+    class User {
+        +ObjectId _id
+        +String email
+        +String username
+        +String password
+        +String role
+        +Number cashBalance
+        +Boolean isActive
+        +Date createdAt
+        +Date updatedAt
+        +comparePassword(candidate) Boolean
+        +toJSON() Object
+    }
+
+    class Portfolio {
+        +ObjectId _id
+        +ObjectId user
+        +Asset[] assets
+        +Date createdAt
+        +Date updatedAt
+    }
+
+    class Asset {
+        <<embedded>>
+        +String symbol
+        +String coinId
+        +String name
+        +Number quantity
+        +Number avgBuyPrice
+    }
+
+    class Order {
+        +ObjectId _id
+        +ObjectId user
+        +String symbol
+        +String coinId
+        +String name
+        +String type
+        +String side
+        +Number quantity
+        +Number price
+        +Number executedPrice
+        +String status
+        +Date filledAt
+        +Date cancelledAt
+        +Date expiresAt
+    }
+
+    class Transaction {
+        +ObjectId _id
+        +ObjectId user
+        +ObjectId order
+        +String symbol
+        +String coinId
+        +String name
+        +String side
+        +Number quantity
+        +Number price
+        +Number total
+        +Number fee
+        +Date createdAt
+    }
+
+    class MarketData {
+        <<external API>>
+        +String id
+        +String symbol
+        +String name
+        +Number current_price
+        +Number market_cap
+        +Number price_change_24h
+        +String image
+    }
+
+    User "1" --o "1" Portfolio : has
+    Portfolio "1" --* "many" Asset : contains
+    User "1" --o "many" Order : places
+    User "1" --o "many" Transaction : owns
+    Order "1" --o "0..1" Transaction : produces
+    Asset ..> MarketData : valued by
+    Order ..> MarketData : priced by

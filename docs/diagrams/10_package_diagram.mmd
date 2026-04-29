@@ -1,0 +1,54 @@
+graph TB
+    classDef pkg fill:#1F2937,stroke:#10B981,stroke-width:2px,color:#fff
+    classDef sub fill:#111827,stroke:#3B82F6,stroke-width:1px,color:#fff
+
+    subgraph Root [paper-trading]
+        subgraph Backend [backend/]
+            BSrc[src/]:::pkg
+            BScripts[scripts/]:::pkg
+
+            subgraph BSrcSub [src/]
+                Config[config/<br/>db.js, env.js]:::sub
+                Models[models/<br/>User, Portfolio, Order, Transaction]:::sub
+                Repositories[repositories/<br/>userRepository, orderRepository,<br/>portfolioRepository, transactionRepository]:::sub
+                Services[services/<br/>authService, marketDataService,<br/>orderService, portfolioService, leaderboardService]:::sub
+                Controllers[controllers/<br/>auth, market, order, portfolio,<br/>leaderboard, admin]:::sub
+                Middleware[middleware/<br/>auth, validate, errorHandler]:::sub
+                Routes[routes/<br/>auth, market, order, portfolio,<br/>leaderboard, admin]:::sub
+                Utils[utils/<br/>logger]:::sub
+                AppFiles[app.js, server.js]:::sub
+            end
+        end
+
+        subgraph Frontend [frontend/]
+            FSrc[src/]:::pkg
+            FPublic[public/]:::pkg
+
+            subgraph FSrcSub [src/]
+                Pages[pages/<br/>Landing, Login, Register, Dashboard,<br/>Market, MarketDetail, Trade, Portfolio,<br/>Orders, Leaderboard, Profile, Admin]:::sub
+                Components[components/<br/>Navbar, ProtectedRoute,<br/>PriceChart, Loading, format]:::sub
+                Context[context/<br/>AuthContext]:::sub
+                ServicesF[services/<br/>api.js]:::sub
+                Entry[main.jsx, App.jsx, index.css]:::sub
+            end
+        end
+
+        subgraph Docs [docs/]
+            Diagrams[diagrams/<br/>9 UML diagrams - .mmd, .svg]:::pkg
+            SAD[SAD_v2.docx<br/>Software Architecture Document]:::pkg
+        end
+    end
+
+    Controllers --> Services
+    Controllers --> Middleware
+    Services --> Repositories
+    Repositories --> Models
+    Routes --> Controllers
+    AppFiles --> Routes
+    AppFiles --> Middleware
+
+    Pages --> Components
+    Pages --> Context
+    Pages --> ServicesF
+    Components --> ServicesF
+    Entry --> Pages

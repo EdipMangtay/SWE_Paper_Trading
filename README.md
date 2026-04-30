@@ -1,60 +1,63 @@
-# Paper Trading — Sanal Borsa Simülasyonu
+# Paper Trading — Virtual Exchange Simulator
 
-> **Software Architecture · Phase 2 Final Submission**
-> İstinye Üniversitesi · Yazılım Mühendisliği · Doç. Dr. Bahman Arasteh
+> **Software Architecture · Phase 2 Final Submission**  
+> Istinye University · Software Engineering · Assoc. Prof. Dr. Bahman Arasteh
 
-Risksiz, gerçek piyasa verisiyle çalışan kripto trading simülatörü. Kullanıcılar $100.000 sanal bakiye ile başlar, **Market** ve **Limit** emirler verir, portföylerini canlı verilerle takip eder ve liderlik tablosunda yer alır.
+A risk-free crypto trading simulator backed by live market data. Users start with **$100,000** in paper cash, place **market** and **limit** orders, track portfolios with live prices, and compete on the leaderboard.
 
 ```
-Mimari Stil:        Layered Architecture + REST API
-Görünüm Modeli:     Kruchten 4+1 View Model
-Stack:              Node.js + Express + MongoDB · React + Vite + Tailwind
-External:           CoinGecko API (free tier)
+Architecture:     Layered Architecture + REST API
+View model:       Kruchten 4+1 View Model
+Stack:            Node.js + Express + MongoDB · React + Vite + Tailwind
+External API:     CoinGecko (free tier)
 ```
 
 ---
 
-## İçindekiler
+## Contents
 
-1. [Hızlı Başlangıç](#hızlı-başlangıç)
-2. [Demo Hesaplar](#demo-hesaplar)
-3. [Klasör Yapısı](#klasör-yapısı)
-4. [Mimari Özet](#mimari-özet)
+1. [Quick start](#quick-start)
+2. [Demo accounts](#demo-accounts)
+3. [Project layout](#project-layout)
+4. [Architecture overview](#architecture-overview)
 5. [REST API](#rest-api)
-6. [Dökümanlar & Diyagramlar](#dökümanlar--diyagramlar)
+6. [Documents & diagrams](#documents--diagrams)
 7. [Deployment](#deployment)
-8. [Geliştirme Notları](#geliştirme-notları)
+8. [Development notes](#development-notes)
 
 ---
 
-## Hızlı Başlangıç
+## Quick start
 
-### Gereksinimler
+### Requirements
 
 - **Node.js 18+** ([nodejs.org](https://nodejs.org))
-- **MongoDB**: aşağıdaki seçeneklerden biri
-  - **MongoDB Atlas** (önerilen — ücretsiz cluster) → [cloud.mongodb.com](https://cloud.mongodb.com)
+- **MongoDB** (optional in development — see below) — pick one:
+  - **MongoDB Atlas** (recommended — free cluster) → [cloud.mongodb.com](https://cloud.mongodb.com)
   - **Docker** → `docker run -d -p 27017:27017 --name mongo mongo:6`
   - **Local install** → [mongodb.com/try/download/community](https://www.mongodb.com/try/download/community)
 
-### 1. Backend Kurulumu
+### 1. Backend
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
-# .env dosyasını düzenle: MONGODB_URI ve JWT_SECRET değerlerini ayarla
+# Edit .env: set MONGODB_URI for a persistent database, or leave it empty for
+# in-memory MongoDB in development (data is lost when the process exits).
 
-# Veritabanına demo kullanıcılar ekle (bir kerelik)
-npm run seed
+# If you use a persistent MONGODB_URI, seed demo users once:
+# npm run seed
 
-# Backend'i başlat (http://localhost:5000)
 npm run dev
+# API listens on PORT from .env (default 5002 — avoids macOS reserving 5000)
 ```
 
-### 2. Frontend Kurulumu
+If **`MONGODB_URI` is left empty** in development, the app starts an **in-memory MongoDB** and creates demo users automatically on first boot when the database is empty (see `server.js`). With a real `MONGODB_URI`, run **`npm run seed`** once after `npm install`.
 
-Yeni bir terminal aç:
+### 2. Frontend
+
+Open a **second** terminal:
 
 ```bash
 cd frontend
@@ -62,36 +65,40 @@ npm install
 npm run dev
 ```
 
-Tarayıcıda **http://localhost:5173** açılacaktır.
+The app opens at **http://localhost:5173** (Vite proxies `/api` to the backend port in `vite.config.js`).
 
-### 3. Hızlı doğrulama
+### 3. Quick checks
 
 ```bash
-curl http://localhost:5000/api/health
+# Against the backend directly (default port 5002)
+curl http://localhost:5002/api/health
 # { "status": "ok", "uptime": 12.3, "env": "development" }
 
-curl http://localhost:5000/api/market/prices?limit=5
-# CoinGecko'dan gerçek fiyatlar dönmeli (yoksa fallback liste)
+curl http://localhost:5002/api/market/prices?limit=5
+# Live prices from CoinGecko when available (otherwise fallback list)
+
+# Or via the dev server proxy
+curl http://localhost:5173/api/health
 ```
 
 ---
 
-## Demo Hesaplar
+## Demo accounts
 
-`npm run seed` sonrası şu hesaplar oluşur (her biri $100.000 nakit ile):
+After `npm run seed` (or auto-seed with in-memory MongoDB), these accounts exist — each with **$100,000** cash:
 
-| Email | Şifre | Rol |
+| Email | Password | Role |
 |---|---|---|
 | `admin@papertrading.com` | `admin123` | **admin** |
 | `alice@example.com` | `alice123` | trader |
 | `bob@example.com` | `bob123` | trader |
 | `charlie@example.com` | `charlie123` | trader |
 
-Admin paneline `admin` hesabıyla giriş yapıp `/admin` rotasını ziyaret edebilirsin.
+Sign in with the **admin** account and open **`/admin`** for the admin panel.
 
 ---
 
-## Klasör Yapısı
+## Project layout
 
 ```
 paper-trading/
@@ -100,7 +107,7 @@ paper-trading/
 │   │   ├── server.js                   # Entry: DB connect, HTTP listen, limit worker
 │   │   ├── app.js                      # Express app + middleware + routes
 │   │   ├── config/{db,env}.js          # MongoDB & env
-│   │   ├── models/                     # Mongoose şemaları
+│   │   ├── models/                     # Mongoose schemas
 │   │   │   ├── User.js                 # bcrypt + cashBalance + role
 │   │   │   ├── Portfolio.js            # 1:1 with User, embedded Asset[]
 │   │   │   ├── Order.js                # State machine: PENDING→FILLED/...
@@ -123,20 +130,20 @@ paper-trading/
 ├── frontend/                           ← React SPA
 │   ├── src/
 │   │   ├── main.jsx, App.jsx           # Vite entry + Router
-│   │   ├── pages/                      # 12 sayfa (Landing, Dashboard, Trade, ...)
-│   │   ├── components/                 # Navbar, ProtectedRoute, PriceChart, ...
+│   │   ├── pages/                      # Pages (Landing, Dashboard, Trade, …)
+│   │   ├── components/                 # Navbar, ProtectedRoute, PriceChart, …
 │   │   ├── context/AuthContext.jsx     # JWT in localStorage
 │   │   └── services/api.js             # Axios + interceptor (401 → auto-logout)
 │   ├── public/favicon.svg
 │   ├── index.html
-│   ├── vite.config.js                  # Dev proxy /api → :5000
+│   ├── vite.config.js                  # Dev proxy /api → backend (default :5002)
 │   ├── tailwind.config.js
 │   └── package.json
 │
 ├── docs/
-│   ├── SAD_v2.docx                     ← ★ Software Architecture Document
+│   ├── SAD_v2.docx                     # Software Architecture Document
 │   └── diagrams/
-│       ├── preview.html                ← Tüm 10 diyagramı gösterir
+│       ├── preview.html                # Renders all 10 diagrams
 │       ├── 01_use_case.mmd
 │       ├── 02_class_diagram.mmd
 │       ├── 03_sequence_market_order.mmd
@@ -148,62 +155,62 @@ paper-trading/
 │       ├── 09_deployment_diagram.mmd
 │       └── 10_package_diagram.mmd
 │
-└── README.md                           ← Bu dosya
+└── README.md
 ```
 
 ---
 
-## Mimari Özet
+## Architecture overview
 
 ### 4+1 View Model
 
 ```
                     ┌──────────────────────┐
                     │   USE CASE VIEW      │   ← Diagram 1
-                    │   (Senaryolar)       │
+                    │   (Scenarios)        │
                     └──────────┬───────────┘
                                │
         ┌──────────────────────┼──────────────────────┐
         │                      │                      │
 ┌───────▼────────┐   ┌─────────▼────────┐   ┌────────▼────────┐
-│  LOGICAL VIEW  │   │  PROCESS VIEW    │   │  DEVELOPMENT    │
-│  (Sınıflar)    │   │  (Süreçler)      │   │  VIEW (Kod)     │
-│  Diagram 2     │   │  Diagrams 3-7    │   │  Diagrams 8,10  │
+│  LOGICAL VIEW  │   │  PROCESS VIEW     │   │  DEVELOPMENT    │
+│  (Classes)     │   │  (Processes)      │   │  VIEW (Code)    │
+│  Diagram 2     │   │  Diagrams 3–7     │   │  Diagrams 8, 10 │
 └────────────────┘   └──────────────────┘   └─────────────────┘
                                │
                     ┌──────────▼───────────┐
-                    │  PHYSICAL VIEW (+1)  │   ← Diagram 9
-                    │  (Deployment)        │
+                    │  PHYSICAL VIEW (+1)   │   ← Diagram 9
+                    │  (Deployment)         │
                     └──────────────────────┘
 ```
 
-### Layered Architecture
+### Layered architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│  PRESENTATION   →  React + Vite (frontend/) │
+│  PRESENTATION   →  React + Vite (frontend/)  │
 └──────────────────────┬──────────────────────┘
                        ↓ HTTP/JSON + JWT
 ┌─────────────────────────────────────────────┐
-│  APPLICATION    →  Express controllers      │
+│  APPLICATION    →  Express controllers        │
 │                    + routes + middleware    │
 └──────────────────────┬──────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────┐
 │  BUSINESS       →  services/                │
-│                    (state machine, P&L)     │
+│                    (state machine, P&L)       │
 └──────────────────────┬──────────────────────┘
                        ↓
 ┌─────────────────────────────────────────────┐
-│  DATA ACCESS    →  repositories/ + Mongoose │
+│  DATA ACCESS    →  repositories/ + Mongoose  │
 └──────────────────────┬──────────────────────┘
                        ↓
                   [MongoDB]    [CoinGecko API]
 ```
 
-**Katman kuralı**: Her katman yalnızca bir altındaki katmana bağımlıdır. Yukarı bağımlılık yasak.
+**Layer rule:** Each layer depends only on the layer below. Upward dependencies are not allowed.
 
-### Order State Machine
+### Order state machine
 
 ```
               ┌────────────┐
@@ -218,72 +225,78 @@ paper-trading/
    (terminal)  (terminal)     (terminal)
 ```
 
-- **MARKET** orders: PENDING'i atlayıp doğrudan FILLED'a geçer.
-- **LIMIT** orders: Background worker (30s interval) `shouldFill()` kontrolü yapar.
+- **MARKET** orders skip PENDING and go straight to **FILLED**.
+- **LIMIT** orders: a background worker (30s interval) evaluates `shouldFill()`.
 
 ---
 
 ## REST API
 
-Tüm endpoint'ler `/api` altında. Yazma operasyonları **JWT zorunludur** (`Authorization: Bearer <token>`).
+All routes are under `/api`. Mutations require **JWT** (`Authorization: Bearer <token>`).
 
 ### Auth
-| Method | Endpoint | Auth | Açıklama |
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/auth/register` | public | Yeni hesap, JWT döner |
-| POST | `/api/auth/login` | public | Email + şifre, JWT döner |
-| GET | `/api/auth/me` | JWT | Mevcut user |
+| POST | `/api/auth/register` | public | Create account; returns JWT |
+| POST | `/api/auth/login` | public | Email + password; returns JWT |
+| GET | `/api/auth/me` | JWT | Current user |
 
 ### Market (CoinGecko)
-| Method | Endpoint | Auth | Açıklama |
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| GET | `/api/market/prices?limit=50` | public | Top N coin |
-| GET | `/api/market/search?q=btc` | public | Arama |
-| GET | `/api/market/:coinId` | public | Coin detay |
-| GET | `/api/market/:coinId/history?days=7` | public | Chart datası |
+| GET | `/api/market/prices?limit=50` | public | Top N coins |
+| GET | `/api/market/search?q=btc` | public | Search |
+| GET | `/api/market/:coinId` | public | Coin detail |
+| GET | `/api/market/:coinId/history?days=7` | public | Chart data |
 
 ### Orders
-| Method | Endpoint | Auth | Açıklama |
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/orders` | JWT | Yeni order |
-| GET | `/api/orders?status=PENDING` | JWT | Liste |
-| DELETE | `/api/orders/:id` | JWT | İptal |
+| POST | `/api/orders` | JWT | Create order |
+| GET | `/api/orders?status=PENDING` | JWT | List orders |
+| DELETE | `/api/orders/:id` | JWT | Cancel |
 
 ### Portfolio
-| Method | Endpoint | Auth | Açıklama |
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/api/portfolio` | JWT | KPI + holdings (mark-to-market) |
-| GET | `/api/portfolio/history` | JWT | Tüm transactions |
+| GET | `/api/portfolio/history` | JWT | All transactions |
 | GET | `/api/portfolio/stats` | JWT | Aggregate stats |
 
 ### Leaderboard
-| Method | Endpoint | Auth | Açıklama |
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | GET | `/api/leaderboard?sort=value\|pnlPct` | public | Top traders |
 
 ### Admin
-| Method | Endpoint | Auth | Açıklama |
-|---|---|---|---|
-| GET | `/api/admin/users` | JWT+admin | Tüm kullanıcılar |
-| PATCH | `/api/admin/users/:id` | JWT+admin | `{isActive}` toggle |
-| GET | `/api/admin/stats` | JWT+admin | Sistem istatistikleri |
 
-### Örnek istekler
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/admin/users` | JWT + admin | All users |
+| PATCH | `/api/admin/users/:id` | JWT + admin | Toggle `{ isActive }` |
+| GET | `/api/admin/stats` | JWT + admin | System stats |
+
+### Example requests
 
 ```bash
 # Register
-curl -X POST http://localhost:5000/api/auth/register \
+curl -X POST http://localhost:5002/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"yeni@test.com","username":"yeni","password":"password123"}'
+  -d '{"email":"new@test.com","username":"newuser","password":"password123"}'
 
 # Market BUY
-curl -X POST http://localhost:5000/api/orders \
+curl -X POST http://localhost:5002/api/orders \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"coinId":"bitcoin","type":"MARKET","side":"BUY","quantity":0.01}'
 
 # Limit BUY @ $60000
-curl -X POST http://localhost:5000/api/orders \
+curl -X POST http://localhost:5002/api/orders \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"coinId":"bitcoin","type":"LIMIT","side":"BUY","quantity":0.05,"price":60000}'
@@ -291,15 +304,15 @@ curl -X POST http://localhost:5000/api/orders \
 
 ---
 
-## Dökümanlar & Diyagramlar
+## Documents & diagrams
 
-- **`docs/SAD_v2.docx`** — Tam Software Architecture Document (12 bölüm, ~30 sayfa, 4+1 View Model)
-- **`docs/diagrams/preview.html`** — Tüm 10 UML diyagramını canlı render eder. Tarayıcıda aç!
-- **`docs/diagrams/*.mmd`** — Mermaid kaynak dosyaları (https://mermaid.live ile düzenlenebilir)
+- **`docs/SAD_v2.docx`** — Full Software Architecture Document (~30 pages, 4+1 View Model).
+- **`docs/diagrams/preview.html`** — Live render of all 10 UML diagrams; open in a browser.
+- **`docs/diagrams/*.mmd`** — Mermaid sources (editable at [mermaid.live](https://mermaid.live)).
 
-### Diyagram Listesi
+### Diagram index
 
-| # | Diyagram | View |
+| # | Diagram | View |
 |---|---|---|
 | 01 | Use Case | Use Case View |
 | 02 | Class Diagram | Logical View |
@@ -316,53 +329,53 @@ curl -X POST http://localhost:5000/api/orders \
 
 ## Deployment
 
-### Önerilen Production Stack
+### Suggested production stack
 
-| Katman | Servis | Maliyet |
+| Layer | Service | Cost |
 |---|---|---|
-| Frontend | **Vercel** veya Netlify | Free tier yeterli |
-| Backend | **Railway**, Render, Fly.io | Free tier mevcut |
+| Frontend | **Vercel** or Netlify | Free tier is enough |
+| Backend | **Railway**, Render, Fly.io | Free tiers available |
 | Database | **MongoDB Atlas M0** | 512 MB free |
-| Domain | Cloudflare DNS | Free |
+| DNS | Cloudflare | Free |
 
-### Vercel (Frontend)
+### Vercel (frontend)
 
 ```bash
 cd frontend
 npm i -g vercel
 vercel
-# vercel.json içine /api proxy ekle veya backend public URL'ini build-time env olarak geç
+# Add /api proxy in vercel.json or pass the public backend URL as a build-time env
 ```
 
-### Railway (Backend)
+### Railway (backend)
 
 ```bash
-# 1. Railway'de yeni proje oluştur, GitHub repo bağla
+# 1. Create a project on Railway, connect GitHub
 # 2. Environment variables:
 #    MONGODB_URI = mongodb+srv://...
 #    JWT_SECRET = <strong random>
-#    CLIENT_URL = https://<senin-frontend>.vercel.app
+#    CLIENT_URL = https://<your-frontend>.vercel.app
 #    NODE_ENV = production
-# 3. Build cmd: npm install
-# 4. Start cmd: node src/server.js
+# 3. Build: npm install
+# 4. Start: node src/server.js
 ```
 
 ### MongoDB Atlas
 
-1. https://cloud.mongodb.com → M0 free cluster oluştur
-2. Database User ekle, IP whitelist `0.0.0.0/0` (Railway dynamic IP için)
-3. Connection string'i `MONGODB_URI` olarak Railway'e yaz
+1. Create an **M0** free cluster at [cloud.mongodb.com](https://cloud.mongodb.com).
+2. Create a database user; allow IP **`0.0.0.0/0`** if the host uses dynamic IPs (e.g. Railway).
+3. Set the connection string as `MONGODB_URI` on the backend host.
 
 ---
 
-## Geliştirme Notları
+## Development notes
 
-### Environment Variables
+### Environment variables
 
-Backend `.env` dosyası gerekli alanlar:
+Typical backend `.env` fields:
 
 ```env
-PORT=5000
+PORT=5002
 NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/paper-trading
 JWT_SECRET=change_this_to_a_long_random_string_at_least_32_chars
@@ -373,17 +386,19 @@ PRICE_CACHE_TTL=60
 CLIENT_URL=http://localhost:5173
 ```
 
-### CoinGecko Rate Limit
+Leave **`MONGODB_URI` empty** in local dev to use the automatic **in-memory** database (data resets when the process exits).
 
-Free tier ~10-30 req/min. Sistemin yaklaşımı:
+### CoinGecko rate limits
 
-- **node-cache** ile 60s TTL
-- `getPriceMap()` ile batch çağrılar
-- API down olursa **fallback list** (10 popüler coin) ile sistem ayakta kalır
+Free tier is roughly **10–30 req/min**. Mitigations:
 
-### Limit Order Worker
+- **node-cache** with a ~60s TTL
+- **`getPriceMap()`** for batched calls
+- **Fallback coin list** when the API is down
 
-`src/server.js` içinde `setInterval(..., 30_000)` ile arka planda çalışır:
+### Limit order worker
+
+`src/server.js` runs a **`setInterval(..., 30_000)`** worker:
 
 ```js
 setInterval(async () => {
@@ -392,7 +407,7 @@ setInterval(async () => {
 }, 30_000);
 ```
 
-Production multi-instance dağıtımda bu worker yalnızca tek instance'da çalışmalıdır (lock veya cron-only-one).
+In **multi-instance** production, only one instance should run this worker (distributed lock or dedicated worker).
 
 ### Testing
 
@@ -401,26 +416,25 @@ Production multi-instance dağıtımda bu worker yalnızca tek instance'da çal�
 cd backend
 node -c src/server.js
 node -c src/app.js
-# Tüm dosyalar:
 find src scripts -name "*.js" -exec node -c {} \;
 
-# Frontend build check
+# Frontend build
 cd frontend
 npm run build
 ```
 
 ---
 
-## İş Bölümü (2 kişi)
+## Team split (2 people)
 
-| Üye | Sorumluluk |
+| Member | Responsibility |
 |---|---|
-| **Üye 1** | Backend (modeller, repository, service, middleware, worker) + SAD dokümanı |
-| **Üye 2** | Frontend (React, Tailwind, 12 sayfa, components, AuthContext) |
-| **Ortak** | UML diyagramları, REST API kontratı, code review, deployment |
+| **Member 1** | Backend (models, repository, service, middleware, worker) + SAD |
+| **Member 2** | Frontend (React, Tailwind, pages, components, AuthContext) |
+| **Both** | UML diagrams, REST contract, code review, deployment |
 
 ---
 
-## Lisans
+## License / notice
 
-Akademik amaçlı geliştirilmiştir. İstinye Üniversitesi Yazılım Mühendisliği — Software Architecture (Doç. Dr. Bahman Arasteh) dersi kapsamında.
+Built for academic use as part of **Software Architecture** (Assoc. Prof. Dr. Bahman Arasteh), Software Engineering, **Istinye University**.

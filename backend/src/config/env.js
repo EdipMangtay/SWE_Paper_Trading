@@ -4,7 +4,8 @@
 require('dotenv').config();
 
 const env = {
-  PORT: parseInt(process.env.PORT || '5000', 10),
+  // Default 5002: macOS often reserves 5000 (AirPlay / Control Center)
+  PORT: parseInt(process.env.PORT || '5002', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
 
   // Leave empty by default so development can auto-start an in-memory MongoDB

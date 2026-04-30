@@ -9,32 +9,32 @@ export default function Landing() {
       <section className="py-16 sm:py-24 text-center relative">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent-green/10 border border-accent-green/30 text-accent-green text-xs font-mono uppercase tracking-wider mb-6">
           <span className="w-1.5 h-1.5 rounded-full bg-accent-green animate-pulse"></span>
-          Sanal $100.000 ile başlayın
+          Start with $100,000 paper money
         </div>
         <h1 className="font-display text-5xl sm:text-7xl font-bold leading-tight">
-          Risksiz <span className="text-accent-green">trading</span>.
+          Risk-free <span className="text-accent-green">trading</span>.
           <br />
-          Gerçek <span className="text-accent-blue">piyasa</span> verisi.
+          Real <span className="text-accent-blue">market</span> data.
         </h1>
         <p className="mt-6 text-lg text-white/60 max-w-2xl mx-auto">
-          Gerçek zamanlı kripto fiyatlarıyla portföy oluşturun, market ve limit emirleri verin,
-          stratejilerinizi liderlik tablosunda kanıtlayın.
+          Build a portfolio with live crypto prices, place market and limit orders,
+          and prove your strategies on the leaderboard.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link to="/register" className="btn-primary">Hemen başla — ücretsiz</Link>
-          <Link to="/market" className="btn-ghost">Piyasayı keşfet →</Link>
+          <Link to="/register" className="btn-primary">Get started — free</Link>
+          <Link to="/market" className="btn-ghost">Explore the market →</Link>
         </div>
       </section>
 
       {/* Feature grid */}
       <section className="py-16 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { icon: TrendingUp, title: 'Gerçek piyasa verisi', desc: 'CoinGecko entegrasyonu ile saniyelik kripto fiyatları' },
-          { icon: Wallet,     title: 'Sanal portföy',         desc: '$100.000 sanal bakiye, gerçek strateji' },
-          { icon: Layers,     title: 'Market & Limit emir',   desc: 'Anlık alım veya hedef fiyatta otomatik tetikleme' },
-          { icon: Trophy,     title: 'Liderlik tablosu',      desc: 'Portföy değeri ve kâr yüzdesine göre sıralama' },
-          { icon: Zap,        title: 'Anında geri bildirim',  desc: 'Her işlem sonrası kâr/zarar mark-to-market' },
-          { icon: Shield,     title: 'Sıfır risk',            desc: 'Hiç gerçek para kullanmadan yatırım deneyimi' }
+          { icon: TrendingUp, title: 'Real market data', desc: 'CoinGecko integration with up-to-date crypto prices' },
+          { icon: Wallet,     title: 'Paper portfolio',   desc: '$100,000 virtual balance, real strategy' },
+          { icon: Layers,     title: 'Market & limit orders', desc: 'Instant fills or automatic execution at your price' },
+          { icon: Trophy,     title: 'Leaderboard',      desc: 'Ranked by portfolio value and return percentage' },
+          { icon: Zap,        title: 'Instant feedback', desc: 'Mark-to-market P&L after every trade' },
+          { icon: Shield,     title: 'Zero risk',        desc: 'Practice investing without real money' }
         ].map((f, i) => (
           <div key={i} className="card p-6 hover:border-accent-green/30 transition">
             <div className="w-10 h-10 rounded-lg bg-accent-green/10 grid place-items-center mb-4">
@@ -49,9 +49,9 @@ export default function Landing() {
       {/* Footer CTA */}
       <section className="py-16 text-center">
         <div className="card p-10">
-          <h2 className="font-display text-3xl font-bold">Hesap aç, ilk emrini ver.</h2>
-          <p className="mt-2 text-white/60">Kayıt 30 saniye sürer. Anında trading.</p>
-          <Link to="/register" className="btn-primary mt-6">Ücretsiz Kayıt</Link>
+          <h2 className="font-display text-3xl font-bold">Open an account, place your first order.</h2>
+          <p className="mt-2 text-white/60">Sign up in under a minute. Start trading right away.</p>
+          <Link to="/register" className="btn-primary mt-6">Free registration</Link>
         </div>
       </section>
     </div>

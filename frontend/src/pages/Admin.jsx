@@ -33,34 +33,34 @@ export default function Admin() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       <div>
         <h1 className="font-display text-3xl font-bold flex items-center gap-3">
-          Admin Paneli <span className="pill-gold">ADMIN</span>
+          Admin panel <span className="pill-gold">ADMIN</span>
         </h1>
-        <p className="text-white/60 text-sm mt-1">Kullanıcılar, istatistikler ve sistem sağlığı</p>
+        <p className="text-white/60 text-sm mt-1">Users, statistics, and system health</p>
       </div>
 
       {/* Stats */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi icon={Users}        label="Kullanıcı"     value={stats?.users ?? 0} />
-        <Kpi icon={ListOrdered}  label="Emir"          value={stats?.orders ?? 0} />
-        <Kpi icon={BarChart3}    label="İşlem"         value={stats?.transactions ?? 0} />
-        <Kpi icon={DollarSign}   label="Toplam Hacim"  value={fmtUSD(stats?.totalVolume ?? 0, { digits: 0 })} />
+        <Kpi icon={Users}        label="Users"         value={stats?.users ?? 0} />
+        <Kpi icon={ListOrdered}  label="Orders"        value={stats?.orders ?? 0} />
+        <Kpi icon={BarChart3}    label="Trades"        value={stats?.transactions ?? 0} />
+        <Kpi icon={DollarSign}   label="Total volume"  value={fmtUSD(stats?.totalVolume ?? 0, { digits: 0 })} />
       </div>
 
       {/* Users */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-white/5 flex items-center gap-2">
           <Users size={16} className="text-accent-blue" />
-          <h2 className="font-display text-lg font-semibold">Kullanıcılar</h2>
+          <h2 className="font-display text-lg font-semibold">Users</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/50 font-mono">
               <tr>
-                <th className="text-left px-4 py-3">Kullanıcı Adı</th>
-                <th className="text-left px-4 py-3">E-posta</th>
-                <th className="text-right px-4 py-3">Rol</th>
-                <th className="text-right px-4 py-3">Bakiye</th>
-                <th className="text-right px-4 py-3">Durum</th>
+                <th className="text-left px-4 py-3">Username</th>
+                <th className="text-left px-4 py-3">Email</th>
+                <th className="text-right px-4 py-3">Role</th>
+                <th className="text-right px-4 py-3">Balance</th>
+                <th className="text-right px-4 py-3">Status</th>
                 <th className="text-right px-4 py-3"></th>
               </tr>
             </thead>
@@ -75,16 +75,16 @@ export default function Admin() {
                   <td className="px-4 py-3 text-right font-mono">{fmtUSD(u.cashBalance)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={u.isActive ? 'pill-green' : 'pill-red'}>
-                      {u.isActive ? 'AKTİF' : 'PASİF'}
+                      {u.isActive ? 'ACTIVE' : 'INACTIVE'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => toggleActive(u._id, u.isActive)}
                       className="btn-ghost text-xs"
-                      title={u.isActive ? 'Devre dışı bırak' : 'Aktifleştir'}
+                      title={u.isActive ? 'Deactivate' : 'Activate'}
                     >
-                      {u.isActive ? <><ShieldOff size={12} className="mr-1" /> Devre dışı</> : <><Shield size={12} className="mr-1" /> Aktifleştir</>}
+                      {u.isActive ? <><ShieldOff size={12} className="mr-1" /> Deactivate</> : <><Shield size={12} className="mr-1" /> Activate</>}
                     </button>
                   </td>
                 </tr>

@@ -1,7 +1,7 @@
 // src/components/Loading.jsx
 import { Loader2 } from 'lucide-react';
 
-export function Spinner({ label = 'Yükleniyor…' }) {
+export function Spinner({ label = 'Loading…' }) {
   return (
     <div className="flex items-center justify-center gap-3 py-12 text-white/60">
       <Loader2 size={18} className="animate-spin" />

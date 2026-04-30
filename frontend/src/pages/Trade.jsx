@@ -63,9 +63,9 @@ export default function Trade() {
     e.preventDefault();
     setError(''); setSuccess('');
     const q = parseFloat(qty);
-    if (!(q > 0)) { setError('Miktar pozitif olmalı'); return; }
+    if (!(q > 0)) { setError('Quantity must be positive'); return; }
     if (type === 'LIMIT' && !(parseFloat(limitPrice) > 0)) {
-      setError('Limit fiyat pozitif olmalı'); return;
+      setError('Limit price must be positive'); return;
     }
     setSubmitting(true);
     try {
@@ -73,15 +73,15 @@ export default function Trade() {
       if (type === 'LIMIT') payload.price = parseFloat(limitPrice);
       const order = await orderApi.create(payload);
       if (order.status === 'FILLED') {
-        setSuccess(`Emir gerçekleşti: ${side} ${q} ${coin.symbol} @ ${fmtUSD(order.executedPrice)}`);
+        setSuccess(`Order filled: ${side} ${q} ${coin.symbol} @ ${fmtUSD(order.executedPrice)}`);
       } else {
-        setSuccess(`Emir oluşturuldu (${order.status}). Tetiklendiğinde otomatik gerçekleşecek.`);
+        setSuccess(`Order created (${order.status}). It will fill automatically when the price triggers.`);
       }
       setQty('');
       await load();
       setTimeout(() => navigate('/portfolio'), 1500);
     } catch (err) {
-      setError(err.response?.data?.message || 'İşlem başarısız');
+      setError(err.response?.data?.message || 'Trade failed');
     } finally {
       setSubmitting(false);
     }
@@ -93,7 +93,7 @@ export default function Trade() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <Link to={`/market/${coinId}`} className="inline-flex items-center gap-2 text-white/60 hover:text-white text-sm mb-6">
-        <ArrowLeft size={16} /> Detaya geri dön
+        <ArrowLeft size={16} /> Back to details
       </Link>
 
       <div className="card p-6 mb-4">
@@ -104,7 +104,7 @@ export default function Trade() {
             <div className="text-white/50 font-mono text-sm">{coin.symbol}</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-white/40 font-mono uppercase">Canlı fiyat</div>
+            <div className="text-xs text-white/40 font-mono uppercase">Live price</div>
             <div className="font-mono text-xl">{fmtUSD(livePrice)}</div>
           </div>
         </div>
@@ -120,7 +120,7 @@ export default function Trade() {
               side === 'BUY' ? 'bg-accent-green text-ink-900' : 'text-white/60 hover:text-white'
             }`}
           >
-            ALIM
+            BUY
           </button>
           <button
             type="button"
@@ -129,7 +129,7 @@ export default function Trade() {
               side === 'SELL' ? 'bg-accent-red text-white' : 'text-white/60 hover:text-white'
             }`}
           >
-            SATIM
+            SELL
           </button>
         </div>
 
@@ -152,7 +152,7 @@ export default function Trade() {
         {/* Limit price */}
         {type === 'LIMIT' && (
           <div>
-            <label className="label">Limit fiyat (USD)</label>
+            <label className="label">Limit price (USD)</label>
             <input
               type="number"
               step="any"
@@ -160,17 +160,17 @@ export default function Trade() {
               required
               value={limitPrice}
               onChange={(e) => setLimitPrice(e.target.value)}
-              placeholder="Örn. 60000"
+              placeholder="e.g. 60000"
             />
             <div className="text-xs text-white/40 mt-1">
-              {side === 'BUY' ? 'Fiyat bu seviyeye düştüğünde alım yapılır' : 'Fiyat bu seviyeye çıktığında satım yapılır'}
+              {side === 'BUY' ? 'Buys when price drops to this level' : 'Sells when price rises to this level'}
             </div>
           </div>
         )}
 
         {/* Quantity */}
         <div>
-          <label className="label">Miktar ({coin.symbol})</label>
+          <label className="label">Quantity ({coin.symbol})</label>
           <input
             type="number"
             step="any"
@@ -196,12 +196,12 @@ export default function Trade() {
 
         {/* Summary */}
         <div className="bg-white/5 rounded-lg p-4 space-y-2 text-sm font-mono">
-          <Row label="Kullanılacak fiyat" value={fmtUSD(usePrice)} />
-          <Row label="Toplam" value={fmtUSD(totalCost)} accent />
+          <Row label="Price used" value={fmtUSD(usePrice)} />
+          <Row label="Total" value={fmtUSD(totalCost)} accent />
           {side === 'BUY' ? (
-            <Row label="Mevcut nakit" value={fmtUSD(cash)} muted />
+            <Row label="Available cash" value={fmtUSD(cash)} muted />
           ) : (
-            <Row label={`Mevcut ${coin.symbol}`} value={fmtNum(heldQty, 8)} muted />
+            <Row label={`Held ${coin.symbol}`} value={fmtNum(heldQty, 8)} muted />
           )}
         </div>
 
@@ -217,7 +217,7 @@ export default function Trade() {
           disabled={submitting}
           className={side === 'BUY' ? 'btn-primary w-full' : 'btn-danger w-full'}
         >
-          {submitting ? 'Gönderiliyor…' : `${side === 'BUY' ? 'AL' : 'SAT'} · ${type}`}
+          {submitting ? 'Submitting…' : `${side === 'BUY' ? 'BUY' : 'SELL'} · ${type}`}
         </button>
       </form>
     </div>

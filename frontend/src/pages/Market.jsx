@@ -30,14 +30,14 @@ export default function Market() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Piyasa</h1>
-          <p className="text-white/60 text-sm mt-1">Canlı kripto fiyatları · CoinGecko</p>
+          <h1 className="font-display text-3xl font-bold">Market</h1>
+          <p className="text-white/60 text-sm mt-1">Live crypto prices · CoinGecko</p>
         </div>
         <div className="relative w-full sm:w-72">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
           <input
             type="text"
-            placeholder="Sembol veya isim ara…"
+            placeholder="Search symbol or name…"
             className="input pl-9"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -52,10 +52,10 @@ export default function Market() {
               <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/50 font-mono">
                 <tr>
                   <th className="text-left px-4 py-3">#</th>
-                  <th className="text-left px-4 py-3">Varlık</th>
-                  <th className="text-right px-4 py-3">Fiyat</th>
-                  <th className="text-right px-4 py-3 hidden sm:table-cell">24s</th>
-                  <th className="text-right px-4 py-3 hidden md:table-cell">Piyasa Değeri</th>
+                  <th className="text-left px-4 py-3">Asset</th>
+                  <th className="text-right px-4 py-3">Price</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">24h</th>
+                  <th className="text-right px-4 py-3 hidden md:table-cell">Market cap</th>
                   <th className="text-right px-4 py-3"></th>
                 </tr>
               </thead>
@@ -80,13 +80,13 @@ export default function Market() {
                       {c.market_cap ? fmtUSD(c.market_cap, { digits: 0 }) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/trade/${c.id}`} className="btn-ghost text-xs">İşlem</Link>
+                      <Link to={`/trade/${c.id}`} className="btn-ghost text-xs">Trade</Link>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-white/40">Sonuç yok</td>
+                    <td colSpan={6} className="text-center py-8 text-white/40">No results</td>
                   </tr>
                 )}
               </tbody>

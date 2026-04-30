@@ -26,8 +26,8 @@ export default function Leaderboard() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Liderlik Tablosu</h1>
-          <p className="text-white/60 text-sm mt-1">En başarılı sanal traderlar</p>
+          <h1 className="font-display text-3xl font-bold">Leaderboard</h1>
+          <p className="text-white/60 text-sm mt-1">Top paper traders</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -36,7 +36,7 @@ export default function Leaderboard() {
               sort === 'value' ? 'bg-accent-green text-ink-900' : 'bg-white/5 text-white/60 hover:bg-white/10'
             }`}
           >
-            Toplam Değer
+            Total value
           </button>
           <button
             onClick={() => setSort('pnlPct')}
@@ -57,9 +57,9 @@ export default function Leaderboard() {
                 <tr>
                   <th className="text-left px-4 py-3 w-16">#</th>
                   <th className="text-left px-4 py-3">Trader</th>
-                  <th className="text-right px-4 py-3">Toplam Değer</th>
-                  <th className="text-right px-4 py-3 hidden sm:table-cell">Nakit</th>
-                  <th className="text-right px-4 py-3 hidden sm:table-cell">Varlık</th>
+                  <th className="text-right px-4 py-3">Total value</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">Cash</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">Assets</th>
                   <th className="text-right px-4 py-3">P&L</th>
                 </tr>
               </thead>
@@ -83,7 +83,7 @@ export default function Leaderboard() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-white/40">Henüz sıralama yok</td>
+                    <td colSpan={6} className="text-center py-8 text-white/40">No rankings yet</td>
                   </tr>
                 )}
               </tbody>

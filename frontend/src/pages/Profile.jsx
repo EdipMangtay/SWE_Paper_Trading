@@ -22,7 +22,7 @@ export default function Profile() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <h1 className="font-display text-3xl font-bold">Profil</h1>
+      <h1 className="font-display text-3xl font-bold">Profile</h1>
 
       <div className="card p-6">
         <div className="flex items-center gap-4">
@@ -37,18 +37,18 @@ export default function Profile() {
         </div>
 
         <div className="mt-6 grid sm:grid-cols-3 gap-4">
-          <Info icon={Calendar} label="Üyelik" value={new Date(user?.createdAt || Date.now()).toLocaleDateString('tr-TR')} />
-          <Info icon={Wallet}   label="Nakit Bakiye" value={fmtUSD(portfolio?.cashBalance)} />
-          <Info icon={User}     label="Rol" value={user?.role || 'trader'} />
+          <Info icon={Calendar} label="Member since" value={new Date(user?.createdAt || Date.now()).toLocaleDateString('en-US')} />
+          <Info icon={Wallet}   label="Cash balance" value={fmtUSD(portfolio?.cashBalance)} />
+          <Info icon={User}     label="Role" value={user?.role || 'trader'} />
         </div>
       </div>
 
       <div className="card p-6">
-        <h2 className="font-display text-lg font-semibold mb-4">İstatistikler</h2>
+        <h2 className="font-display text-lg font-semibold mb-4">Statistics</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Stat label="Toplam İşlem" value={stats?.totalTrades ?? 0} />
-          <Stat label="Alış / Satış" value={`${stats?.buyCount ?? 0} / ${stats?.sellCount ?? 0}`} />
-          <Stat label="Toplam Hacim" value={fmtUSD(stats?.totalVolume ?? 0)} />
+          <Stat label="Total trades" value={stats?.totalTrades ?? 0} />
+          <Stat label="Buys / sells" value={`${stats?.buyCount ?? 0} / ${stats?.sellCount ?? 0}`} />
+          <Stat label="Total volume" value={fmtUSD(stats?.totalVolume ?? 0)} />
           <Stat label="P&L %" value={fmtPct(portfolio?.totalPnlPct)} className={pctClass(portfolio?.totalPnlPct)} />
         </div>
       </div>

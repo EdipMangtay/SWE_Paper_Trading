@@ -35,7 +35,7 @@ export default function MarketDetail() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <Link to="/market" className="inline-flex items-center gap-2 text-white/60 hover:text-white text-sm mb-6">
-        <ArrowLeft size={16} /> Piyasaya geri dön
+        <ArrowLeft size={16} /> Back to market
       </Link>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -55,7 +55,7 @@ export default function MarketDetail() {
                 <div className="font-display text-3xl font-bold font-mono">{fmtUSD(coin.current_price)}</div>
                 <div className={`flex items-center justify-end gap-1 font-mono text-sm ${pctClass(coin.price_change_percentage_24h)}`}>
                   {isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {fmtPct(coin.price_change_percentage_24h)} (24s)
+                  {fmtPct(coin.price_change_percentage_24h)} (24h)
                 </div>
               </div>
             </div>
@@ -70,7 +70,7 @@ export default function MarketDetail() {
                     days === d ? 'bg-accent-green text-ink-900' : 'bg-white/5 text-white/60 hover:bg-white/10'
                   }`}
                 >
-                  {d === 1 ? '24S' : `${d}G`}
+                  {d === 1 ? '1D' : `${d}D`}
                 </button>
               ))}
             </div>
@@ -80,11 +80,11 @@ export default function MarketDetail() {
 
           {/* Stats */}
           <div className="card p-6">
-            <h2 className="font-display text-lg font-semibold mb-4">İstatistikler</h2>
+            <h2 className="font-display text-lg font-semibold mb-4">Statistics</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <Stat label="Piyasa Değeri" value={coin.market_cap ? fmtUSD(coin.market_cap, { digits: 0 }) : '—'} />
-              <Stat label="7G Değişim" value={fmtPct(coin.price_change_percentage_7d)} className={pctClass(coin.price_change_percentage_7d)} />
-              <Stat label="30G Değişim" value={fmtPct(coin.price_change_percentage_30d)} className={pctClass(coin.price_change_percentage_30d)} />
+              <Stat label="Market cap" value={coin.market_cap ? fmtUSD(coin.market_cap, { digits: 0 }) : '—'} />
+              <Stat label="7d change" value={fmtPct(coin.price_change_percentage_7d)} className={pctClass(coin.price_change_percentage_7d)} />
+              <Stat label="30d change" value={fmtPct(coin.price_change_percentage_30d)} className={pctClass(coin.price_change_percentage_30d)} />
             </div>
             {coin.description && (
               <p className="text-white/60 text-sm mt-6 leading-relaxed">{coin.description}.</p>
@@ -94,16 +94,16 @@ export default function MarketDetail() {
 
         {/* Right: CTA */}
         <div className="card p-6 h-fit lg:sticky lg:top-20">
-          <h2 className="font-display text-lg font-semibold">Hızlı işlem</h2>
-          <p className="text-white/60 text-sm mt-1">{coin.name} alım/satım emri ver</p>
+          <h2 className="font-display text-lg font-semibold">Quick trade</h2>
+          <p className="text-white/60 text-sm mt-1">Place a buy or sell order for {coin.name}</p>
           {user ? (
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <Link to={`/trade/${coinId}?side=BUY`} className="btn-primary">Al</Link>
-              <Link to={`/trade/${coinId}?side=SELL`} className="btn-danger">Sat</Link>
+              <Link to={`/trade/${coinId}?side=BUY`} className="btn-primary">Buy</Link>
+              <Link to={`/trade/${coinId}?side=SELL`} className="btn-danger">Sell</Link>
             </div>
           ) : (
             <div className="mt-4">
-              <Link to="/login" className="btn-primary w-full">İşlem yapmak için giriş yap</Link>
+              <Link to="/login" className="btn-primary w-full">Sign in to trade</Link>
             </div>
           )}
         </div>

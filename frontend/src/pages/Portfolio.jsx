@@ -26,14 +26,14 @@ export default function Portfolio() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
       <div>
-        <h1 className="font-display text-3xl font-bold">Portföyüm</h1>
-        <p className="text-white/60 text-sm mt-1">Tüm varlıklarının canlı görünümü</p>
+        <h1 className="font-display text-3xl font-bold">My portfolio</h1>
+        <p className="text-white/60 text-sm mt-1">Live view of all your holdings</p>
       </div>
 
       {/* Summary */}
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="card p-5">
-          <div className="text-xs uppercase tracking-wider text-white/50 font-mono mb-2">Toplam Değer</div>
+          <div className="text-xs uppercase tracking-wider text-white/50 font-mono mb-2">Total value</div>
           <div className="font-display text-3xl font-bold font-mono">{fmtUSD(portfolio.totalValue)}</div>
         </div>
         <div className="card p-5">
@@ -46,7 +46,7 @@ export default function Portfolio() {
           </div>
         </div>
         <div className="card p-5">
-          <div className="text-xs uppercase tracking-wider text-white/50 font-mono mb-2">Nakit / Varlık</div>
+          <div className="text-xs uppercase tracking-wider text-white/50 font-mono mb-2">Cash / assets</div>
           <div className="font-mono text-lg">
             <span className="text-accent-blue">{fmtUSD(portfolio.cashBalance)}</span>
             <span className="text-white/30 mx-2">/</span>
@@ -59,24 +59,24 @@ export default function Portfolio() {
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-white/5 flex items-center gap-2">
           <Briefcase size={16} className="text-accent-green" />
-          <h2 className="font-display text-lg font-semibold">Varlıklar</h2>
+          <h2 className="font-display text-lg font-semibold">Holdings</h2>
         </div>
         {portfolio.holdings.length === 0 ? (
           <EmptyState
             icon={Briefcase}
-            title="Henüz varlığın yok"
-            hint="Piyasaya göz at ve ilk işlemini gerçekleştir."
+            title="No holdings yet"
+            hint="Browse the market and place your first trade."
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/50 font-mono">
                 <tr>
-                  <th className="text-left px-4 py-3">Varlık</th>
-                  <th className="text-right px-4 py-3">Miktar</th>
-                  <th className="text-right px-4 py-3 hidden sm:table-cell">Ort. Maliyet</th>
-                  <th className="text-right px-4 py-3 hidden sm:table-cell">Anlık Fiyat</th>
-                  <th className="text-right px-4 py-3">Değer</th>
+                  <th className="text-left px-4 py-3">Asset</th>
+                  <th className="text-right px-4 py-3">Qty</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">Avg. cost</th>
+                  <th className="text-right px-4 py-3 hidden sm:table-cell">Live price</th>
+                  <th className="text-right px-4 py-3">Value</th>
                   <th className="text-right px-4 py-3">P&L</th>
                   <th className="text-right px-4 py-3"></th>
                 </tr>
@@ -97,7 +97,7 @@ export default function Portfolio() {
                       <div className="text-xs">{fmtPct(h.pnlPct)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/trade/${h.coinId}?side=SELL`} className="btn-ghost text-xs">Sat</Link>
+                      <Link to={`/trade/${h.coinId}?side=SELL`} className="btn-ghost text-xs">Sell</Link>
                     </td>
                   </tr>
                 ))}
@@ -111,28 +111,28 @@ export default function Portfolio() {
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-white/5 flex items-center gap-2">
           <History size={16} className="text-accent-blue" />
-          <h2 className="font-display text-lg font-semibold">İşlem Geçmişi</h2>
+          <h2 className="font-display text-lg font-semibold">Trade history</h2>
         </div>
         {transactions.length === 0 ? (
-          <EmptyState icon={History} title="İşlem geçmişi boş" hint="İlk emrini verdiğinde burada görünecek." />
+          <EmptyState icon={History} title="No trades yet" hint="Fills will appear here after you place orders." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/50 font-mono">
                 <tr>
-                  <th className="text-left px-4 py-3">Tarih</th>
-                  <th className="text-left px-4 py-3">Varlık</th>
-                  <th className="text-right px-4 py-3">Yön</th>
-                  <th className="text-right px-4 py-3">Miktar</th>
-                  <th className="text-right px-4 py-3">Fiyat</th>
-                  <th className="text-right px-4 py-3">Toplam</th>
+                  <th className="text-left px-4 py-3">Date</th>
+                  <th className="text-left px-4 py-3">Asset</th>
+                  <th className="text-right px-4 py-3">Side</th>
+                  <th className="text-right px-4 py-3">Qty</th>
+                  <th className="text-right px-4 py-3">Price</th>
+                  <th className="text-right px-4 py-3">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {transactions.map((t) => (
                   <tr key={t._id} className="hover:bg-white/5">
                     <td className="px-4 py-3 text-white/60 font-mono text-xs">
-                      {new Date(t.createdAt).toLocaleString('tr-TR')}
+                      {new Date(t.createdAt).toLocaleString('en-US')}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{t.name}</div>

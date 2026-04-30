@@ -14,11 +14,11 @@ export default function Register() {
     e.preventDefault();
     setError('');
     if (form.password !== form.confirm) {
-      setError('Şifreler eşleşmiyor');
+      setError('Passwords do not match');
       return;
     }
     if (form.password.length < 6) {
-      setError('Şifre en az 6 karakter olmalı');
+      setError('Password must be at least 6 characters');
       return;
     }
     try {
@@ -27,19 +27,19 @@ export default function Register() {
     } catch (err) {
       const data = err.response?.data;
       const detail = data?.errors?.map((x) => `${x.field}: ${x.msg}`).join(', ');
-      setError(detail || data?.message || 'Kayıt başarısız');
+      setError(detail || data?.message || 'Registration failed');
     }
   }
 
   return (
     <div className="min-h-[calc(100vh-8rem)] grid place-items-center px-4">
       <div className="card p-8 w-full max-w-md">
-        <h1 className="font-display text-3xl font-bold mb-2">Hesap oluştur</h1>
-        <p className="text-white/60 text-sm mb-6">Sıfırdan başla, $100.000 sanal bakiyeyi al.</p>
+        <h1 className="font-display text-3xl font-bold mb-2">Create account</h1>
+        <p className="text-white/60 text-sm mb-6">Start fresh with $100,000 in paper balance.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="label">Kullanıcı adı</label>
+            <label className="label">Username</label>
             <input
               className="input"
               required
@@ -52,19 +52,19 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="label">E-posta</label>
+            <label className="label">Email</label>
             <input
               type="email"
               className="input"
               required
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="ornek@email.com"
+              placeholder="you@example.com"
             />
           </div>
 
           <div>
-            <label className="label">Şifre</label>
+            <label className="label">Password</label>
             <input
               type="password"
               className="input"
@@ -72,12 +72,12 @@ export default function Register() {
               minLength={6}
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="En az 6 karakter"
+              placeholder="At least 6 characters"
             />
           </div>
 
           <div>
-            <label className="label">Şifre (tekrar)</label>
+            <label className="label">Confirm password</label>
             <input
               type="password"
               className="input"
@@ -90,13 +90,13 @@ export default function Register() {
           {error && <ErrorBox>{error}</ErrorBox>}
 
           <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? 'Oluşturuluyor…' : 'Hesabı oluştur'}
+            {loading ? 'Creating…' : 'Create account'}
           </button>
         </form>
 
         <div className="mt-6 text-center text-white/60 text-sm">
-          Zaten hesabın var mı?{' '}
-          <Link to="/login" className="text-accent-green hover:underline">Giriş yap</Link>
+          Already have an account?{' '}
+          <Link to="/login" className="text-accent-green hover:underline">Sign in</Link>
         </div>
       </div>
     </div>

@@ -6,13 +6,13 @@ export default function PriceChart({ data, height = 240, color = '#10B981' }) {
   if (!data || data.length === 0) {
     return (
       <div className="h-60 grid place-items-center text-white/40 text-sm">
-        Grafik verisi bekleniyor…
+        Waiting for chart data…
       </div>
     );
   }
 
   const formatted = data.map((p) => ({
-    time: new Date(p.time).toLocaleString('tr-TR', { month: 'short', day: '2-digit', hour: '2-digit' }),
+    time: new Date(p.time).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit' }),
     price: p.price
   }));
 
@@ -36,7 +36,7 @@ export default function PriceChart({ data, height = 240, color = '#10B981' }) {
         <Tooltip
           contentStyle={{ background: '#111827', border: '1px solid #ffffff20', borderRadius: 8, fontSize: 12 }}
           labelStyle={{ color: '#ffffff80' }}
-          formatter={(v) => [fmtUSD(v), 'Fiyat']}
+          formatter={(v) => [fmtUSD(v), 'Price']}
         />
         <Area type="monotone" dataKey="price" stroke={color} fill="url(#grad)" strokeWidth={2} />
       </AreaChart>

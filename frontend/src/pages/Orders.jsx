@@ -24,7 +24,7 @@ export default function Orders() {
       const data = await orderApi.list(filter || undefined);
       setOrders(data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Yükleme hatası');
+      setError(err.response?.data?.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
@@ -33,12 +33,12 @@ export default function Orders() {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter]);
 
   async function handleCancel(id) {
-    if (!confirm('Bu emri iptal etmek istediğine emin misin?')) return;
+    if (!confirm('Cancel this order?')) return;
     try {
       await orderApi.cancel(id);
       await load();
     } catch (err) {
-      alert(err.response?.data?.message || 'İptal hatası');
+      alert(err.response?.data?.message || 'Cancel failed');
     }
   }
 
@@ -46,8 +46,8 @@ export default function Orders() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold">Emirler</h1>
-          <p className="text-white/60 text-sm mt-1">Tüm aktif ve geçmiş emirlerin</p>
+          <h1 className="font-display text-3xl font-bold">Orders</h1>
+          <p className="text-white/60 text-sm mt-1">All active and past orders</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {['', 'PENDING', 'FILLED', 'CANCELLED', 'EXPIRED'].map((f) => (
@@ -58,7 +58,7 @@ export default function Orders() {
                 filter === f ? 'bg-accent-green text-ink-900' : 'bg-white/5 text-white/60 hover:bg-white/10'
               }`}
             >
-              {f || 'TÜMÜ'}
+              {f || 'ALL'}
             </button>
           ))}
         </div>
@@ -69,19 +69,19 @@ export default function Orders() {
       {loading ? <Spinner /> : (
         <div className="card overflow-hidden">
           {orders.length === 0 ? (
-            <EmptyState icon={ListOrdered} title="Emir bulunamadı" hint="İşlem yaptığında burada görünecek." />
+            <EmptyState icon={ListOrdered} title="No orders yet" hint="Your trades will show up here." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/50 font-mono">
                   <tr>
-                    <th className="text-left px-4 py-3">Tarih</th>
-                    <th className="text-left px-4 py-3">Varlık</th>
-                    <th className="text-right px-4 py-3">Tip</th>
-                    <th className="text-right px-4 py-3">Yön</th>
-                    <th className="text-right px-4 py-3">Miktar</th>
-                    <th className="text-right px-4 py-3">Fiyat</th>
-                    <th className="text-right px-4 py-3">Durum</th>
+                    <th className="text-left px-4 py-3">Date</th>
+                    <th className="text-left px-4 py-3">Asset</th>
+                    <th className="text-right px-4 py-3">Type</th>
+                    <th className="text-right px-4 py-3">Side</th>
+                    <th className="text-right px-4 py-3">Qty</th>
+                    <th className="text-right px-4 py-3">Price</th>
+                    <th className="text-right px-4 py-3">Status</th>
                     <th className="text-right px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -89,7 +89,7 @@ export default function Orders() {
                   {orders.map((o) => (
                     <tr key={o._id} className="hover:bg-white/5">
                       <td className="px-4 py-3 text-white/60 font-mono text-xs">
-                        {new Date(o.createdAt).toLocaleString('tr-TR')}
+                        {new Date(o.createdAt).toLocaleString('en-US')}
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium">{o.name}</div>
@@ -111,7 +111,7 @@ export default function Orders() {
                       <td className="px-4 py-3 text-right">
                         {o.status === 'PENDING' && (
                           <button onClick={() => handleCancel(o._id)} className="btn-ghost text-xs">
-                            <X size={12} className="mr-1" /> İptal
+                            <X size={12} className="mr-1" /> Cancel
                           </button>
                         )}
                       </td>

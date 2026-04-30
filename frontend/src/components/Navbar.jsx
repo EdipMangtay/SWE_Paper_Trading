@@ -16,10 +16,10 @@ export default function Navbar() {
     { to: '/market',      label: 'Market' },
     ...(user ? [
       { to: '/dashboard', label: 'Dashboard' },
-      { to: '/portfolio', label: 'Portföy' },
-      { to: '/orders',    label: 'Emirler' },
+      { to: '/portfolio', label: 'Portfolio' },
+      { to: '/orders',    label: 'Orders' },
     ] : []),
-    { to: '/leaderboard', label: 'Liderlik' }
+    { to: '/leaderboard', label: 'Leaderboard' }
   ];
 
   return (
@@ -68,14 +68,14 @@ export default function Navbar() {
                 <User size={16} className="mr-1.5" />
                 <span className="hidden sm:inline">{user.username}</span>
               </NavLink>
-              <button onClick={handleLogout} className="btn-ghost text-sm" title="Çıkış">
+              <button onClick={handleLogout} className="btn-ghost text-sm" title="Sign out">
                 <LogOut size={16} />
               </button>
             </>
           ) : (
             <>
-              <Link to="/login" className="btn-ghost text-sm">Giriş</Link>
-              <Link to="/register" className="btn-primary text-sm">Kayıt Ol</Link>
+              <Link to="/login" className="btn-ghost text-sm">Sign in</Link>
+              <Link to="/register" className="btn-primary text-sm">Register</Link>
             </>
           )}
         </div>

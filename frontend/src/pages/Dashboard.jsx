@@ -37,28 +37,28 @@ export default function Dashboard() {
       {/* Greeting */}
       <div>
         <h1 className="font-display text-3xl font-bold">
-          Merhaba, <span className="text-accent-green">{user?.username}</span>.
+          Hi, <span className="text-accent-green">{user?.username}</span>.
         </h1>
-        <p className="text-white/60 text-sm mt-1">Portföyüne hoşgeldin.</p>
+        <p className="text-white/60 text-sm mt-1">Welcome to your portfolio.</p>
       </div>
 
       {/* KPI Cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           icon={Wallet}
-          label="Toplam Değer"
+          label="Total value"
           value={fmtUSD(portfolio?.totalValue)}
           accent="text-white"
         />
         <KpiCard
           icon={Activity}
-          label="Nakit Bakiye"
+          label="Cash balance"
           value={fmtUSD(portfolio?.cashBalance)}
           accent="text-accent-blue"
         />
         <KpiCard
           icon={BarChart3}
-          label="Varlık Değeri"
+          label="Assets value"
           value={fmtUSD(portfolio?.assetsValue)}
           accent="text-accent-gold"
         />
@@ -76,12 +76,12 @@ export default function Dashboard() {
         {/* Holdings */}
         <div className="card p-6 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl font-semibold">Varlıklarım</h2>
-            <Link to="/portfolio" className="text-accent-green text-sm hover:underline">Tümünü gör →</Link>
+            <h2 className="font-display text-xl font-semibold">My holdings</h2>
+            <Link to="/portfolio" className="text-accent-green text-sm hover:underline">View all →</Link>
           </div>
           {portfolio?.holdings?.length === 0 ? (
             <div className="text-center py-12 text-white/40">
-              Henüz varlığın yok. <Link to="/market" className="text-accent-green hover:underline">Piyasaya göz at →</Link>
+              You have no holdings yet. <Link to="/market" className="text-accent-green hover:underline">Browse the market →</Link>
             </div>
           ) : (
             <div className="space-y-2">
@@ -110,8 +110,8 @@ export default function Dashboard() {
         {/* Top Coins */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-xl font-semibold">Piyasa</h2>
-            <Link to="/market" className="text-accent-green text-sm hover:underline">Tümü →</Link>
+            <h2 className="font-display text-xl font-semibold">Market</h2>
+            <Link to="/market" className="text-accent-green text-sm hover:underline">All →</Link>
           </div>
           <div className="space-y-2">
             {topCoins.map((c) => (

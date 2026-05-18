@@ -3,7 +3,10 @@
 
 export function fmtUSD(n, opts = {}) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  const digits = Math.abs(n) >= 1 ? 2 : 6;
+  // Use 2 decimals for values >= 1 or exactly 0; use 6 only for fractional
+  // sub-dollar prices (e.g. SHIB, PEPE) where precision matters.
+  const abs = Math.abs(n);
+  const digits = abs >= 1 || abs === 0 ? 2 : 6;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

@@ -143,25 +143,23 @@ export default function MarketDetail() {
   const priceForDisplay = livePrice ?? coin.current_price;
 
   return (
-    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-3 lg:py-4">
+    <div className="max-w-[1800px] mx-auto px-2 sm:px-3 lg:px-4 py-2 lg:py-3">
       <Link
         to="/market"
-        className="inline-flex items-center gap-2 text-white/55 hover:text-white text-sm mb-3 transition"
+        className="inline-flex items-center gap-2 text-white/55 hover:text-white text-sm mb-2 transition"
       >
         <ArrowLeft size={16} /> Back to market
       </Link>
 
       {/* Top ticker / header */}
-      <div className="card px-4 sm:px-5 py-3.5 mb-3 flex flex-wrap items-center justify-between gap-3 card-in">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="card px-3 sm:px-4 py-2.5 mb-2 flex flex-wrap items-center justify-between gap-2 card-in">
+        <div className="flex items-center gap-2.5 min-w-0">
           {coin.image && (
-            <div className="relative">
-              <img src={coin.image} alt="" className="w-11 h-11 rounded-full flex-shrink-0 ring-1 ring-white/10" />
-            </div>
+            <img src={coin.image} alt="" className="w-9 h-9 rounded-full flex-shrink-0 ring-1 ring-white/10" />
           )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-display text-xl sm:text-2xl font-bold truncate">{coin.name}</h1>
+              <h1 className="font-display text-lg sm:text-xl font-bold truncate">{coin.name}</h1>
               <span className="pill-mute">{coin.symbol}/USDT</span>
               <LiveBadge isLive={isLive} ts={liveTs} />
             </div>
@@ -214,9 +212,9 @@ export default function MarketDetail() {
       </div>
 
       {/* Main exchange grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-3">
         {/* LEFT — Trade panel */}
-        <aside className="lg:col-span-3 xl:col-span-3 order-2 lg:order-1">
+        <aside className="lg:col-span-3 xl:col-span-2 order-2 lg:order-1">
           <div className="lg:sticky lg:top-20">
             <TradePanel
               coin={{ ...coin, current_price: priceForDisplay }}
@@ -240,7 +238,7 @@ export default function MarketDetail() {
         </aside>
 
         {/* CENTER — Chart */}
-        <section className="lg:col-span-6 xl:col-span-6 order-1 lg:order-2 min-w-0">
+        <section className="lg:col-span-6 xl:col-span-8 order-1 lg:order-2 min-w-0">
           <div className="card overflow-hidden card-in">
             <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-gradient-to-r from-ink-800/60 to-transparent">
               <div className="flex items-center gap-1">
@@ -262,14 +260,14 @@ export default function MarketDetail() {
                 {tvSymbol} <span className="text-white/20">·</span> TradingView
               </div>
             </div>
-            <div className="h-[460px] sm:h-[540px] lg:h-[620px]">
+            <div className="h-[480px] sm:h-[600px] lg:h-[calc(100vh-220px)] lg:min-h-[640px] xl:min-h-[760px]">
               <TradingViewChart symbol={tvSymbol} interval={chartInterval} />
             </div>
           </div>
         </section>
 
         {/* RIGHT — Position + info */}
-        <aside className="lg:col-span-3 xl:col-span-3 order-3 lg:order-3 space-y-3">
+        <aside className="lg:col-span-3 xl:col-span-2 order-3 lg:order-3 space-y-3">
           <PositionCard
             coin={coin}
             holding={holding}

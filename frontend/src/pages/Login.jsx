@@ -64,9 +64,11 @@ export default function Login() {
           <Link to="/register" className="text-accent-green hover:underline">Register</Link>
         </div>
 
-        <div className="mt-6 pt-6 border-t border-white/5 text-xs text-white/40 font-mono">
-          Demo: <span className="text-white/60">alice@example.com / alice123</span>
-        </div>
+        {!import.meta.env.PROD && (
+          <div className="mt-6 pt-6 border-t border-white/5 text-xs text-white/40 font-mono">
+            Demo: <span className="text-white/60">alice@example.com / alice123</span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -14,8 +14,13 @@ const logger = require('../utils/logger');
 const { coinIdToBinanceSymbol } = require('../utils/binanceSymbol');
 
 const cache = new NodeCache({ stdTTL: env.PRICE_CACHE_TTL, checkperiod: 30 });
+// CoinGecko meta (image, description, 7d/30d %) changes slowly — long cache.
+const metaCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
 const BINANCE_BASE = 'https://api.binance.com/api/v3';
+
+// Last-known good prices so transient Binance hiccups don't leave us empty.
+const lastKnownPrice = new Map(); // symbol -> { lastPrice, priceChangePercent, quoteVolume, ts }
 
 // Curated top-50 list (CoinGecko ids + symbols). Used when CoinGecko's /markets
 // endpoint is unavailable. Names/images stay reasonable; prices are filled
@@ -75,7 +80,62 @@ const TOP_50 = [
 
 /* =========================================================================
  * Binance helpers (the trusted live source)
+ *
+ * Resilience strategy:
+ *   1. Try the batch request for exactly the symbols we want.
+ *   2. If it fails (rate limit, one invalid symbol blowing up the batch, etc.)
+ *      fall back to a single "all spot symbols" request that's cached for 30 s
+ *      and filter down to the symbols we wanted.
+ *   3. As a final cushion keep the last successful value for each symbol so a
+ *      transient hiccup never empties the UI.
  * =======================================================================*/
+
+function rememberTicker(t) {
+  if (!t || !t.symbol) return;
+  lastKnownPrice.set(t.symbol, {
+    lastPrice: parseFloat(t.lastPrice ?? t.price ?? 0),
+    priceChangePercent: parseFloat(t.priceChangePercent ?? 0),
+    quoteVolume: parseFloat(t.quoteVolume ?? 0),
+    ts: Date.now()
+  });
+}
+
+async function fetchAllTickers24h() {
+  const cached = cache.get('binance_all_24hr');
+  if (cached) return cached;
+  try {
+    const { data } = await axios.get(`${BINANCE_BASE}/ticker/24hr`, { timeout: 9000 });
+    const arr = Array.isArray(data) ? data : [];
+    const map = new Map();
+    for (const t of arr) {
+      if (t && t.symbol) {
+        map.set(t.symbol, t);
+        rememberTicker(t);
+      }
+    }
+    cache.set('binance_all_24hr', map, 30);
+    return map;
+  } catch (err) {
+    logger.warn(`Binance all-24hr fallback failed: ${err.message}`);
+    return new Map();
+  }
+}
+
+async function fetchAllPrices() {
+  const cached = cache.get('binance_all_prices');
+  if (cached) return cached;
+  try {
+    const { data } = await axios.get(`${BINANCE_BASE}/ticker/price`, { timeout: 9000 });
+    const arr = Array.isArray(data) ? data : [];
+    const map = new Map();
+    for (const p of arr) if (p && p.symbol) map.set(p.symbol, parseFloat(p.price));
+    cache.set('binance_all_prices', map, 30);
+    return map;
+  } catch (err) {
+    logger.warn(`Binance all-prices fallback failed: ${err.message}`);
+    return new Map();
+  }
+}
 
 async function binance24hr(symbols) {
   if (!symbols.length) return [];
@@ -84,10 +144,26 @@ async function binance24hr(symbols) {
       ? { symbol: symbols[0] }
       : { symbols: JSON.stringify(symbols) };
     const { data } = await axios.get(`${BINANCE_BASE}/ticker/24hr`, { params, timeout: 7000 });
-    return Array.isArray(data) ? data : [data];
+    const out = Array.isArray(data) ? data : [data];
+    for (const t of out) rememberTicker(t);
+    return out;
   } catch (err) {
-    logger.warn(`Binance 24hr failed (${symbols.length} symbols): ${err.message}`);
-    return [];
+    logger.warn(`Binance 24hr batch failed (${symbols.length} symbols): ${err.message} — trying all-tickers fallback`);
+    const all = await fetchAllTickers24h();
+    const out = [];
+    for (const sym of symbols) {
+      if (all.has(sym)) out.push(all.get(sym));
+      else if (lastKnownPrice.has(sym)) {
+        const k = lastKnownPrice.get(sym);
+        out.push({
+          symbol: sym,
+          lastPrice: String(k.lastPrice),
+          priceChangePercent: String(k.priceChangePercent),
+          quoteVolume: String(k.quoteVolume)
+        });
+      }
+    }
+    return out;
   }
 }
 
@@ -100,11 +176,27 @@ async function binancePrices(symbols) {
     const { data } = await axios.get(`${BINANCE_BASE}/ticker/price`, { params, timeout: 7000 });
     const arr = Array.isArray(data) ? data : [data];
     const out = {};
-    for (const row of arr) out[row.symbol] = parseFloat(row.price);
+    for (const row of arr) {
+      out[row.symbol] = parseFloat(row.price);
+      // Keep tickers cache informed of fresh prices so the 24h fallback stays warm.
+      const existing = lastKnownPrice.get(row.symbol);
+      lastKnownPrice.set(row.symbol, {
+        lastPrice: parseFloat(row.price),
+        priceChangePercent: existing?.priceChangePercent ?? 0,
+        quoteVolume: existing?.quoteVolume ?? 0,
+        ts: Date.now()
+      });
+    }
     return out;
   } catch (err) {
-    logger.warn(`Binance prices failed: ${err.message}`);
-    return {};
+    logger.warn(`Binance price batch failed (${symbols.length} symbols): ${err.message} — trying all-prices fallback`);
+    const all = await fetchAllPrices();
+    const out = {};
+    for (const sym of symbols) {
+      if (all.has(sym)) out[sym] = all.get(sym);
+      else if (lastKnownPrice.has(sym)) out[sym] = lastKnownPrice.get(sym).lastPrice;
+    }
+    return out;
   }
 }
 
@@ -113,19 +205,26 @@ async function binancePrices(symbols) {
  * =======================================================================*/
 
 async function geckoCoin(coinId) {
+  const cached = metaCache.get(`meta_${coinId}`);
+  if (cached) return cached;
   try {
     const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/coins/${coinId}`, {
       params: { localization: false, tickers: false, community_data: false, developer_data: false, sparkline: false },
       timeout: 6000
     });
-    return {
+    const out = {
       image: data.image?.large || null,
       description: (data.description?.en || '').split('. ')[0] || '',
       market_cap: data.market_data?.market_cap?.usd ?? null,
       price_change_percentage_7d:  data.market_data?.price_change_percentage_7d ?? null,
       price_change_percentage_30d: data.market_data?.price_change_percentage_30d ?? null
     };
-  } catch (_) {
+    metaCache.set(`meta_${coinId}`, out);
+    return out;
+  } catch (err) {
+    // CoinGecko free tier rate-limits cloud IPs. Cache an empty result briefly so
+    // we don't hammer them on every page reload.
+    metaCache.set(`meta_${coinId}`, {}, 60);
     return {};
   }
 }
@@ -196,15 +295,13 @@ const marketDataService = {
     const isStable = coinId === 'tether' || coinId === 'usd-coin' || coinId === 'dai';
     const price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
 
-    if (!price) {
-      const e = new Error('Live price unavailable for this coin'); e.status = 503; throw e;
-    }
-
     const result = {
       id: coinId,
       symbol: (curated?.symbol || coinId).toUpperCase(),
       name: curated?.name || coinId,
       image: meta.image || curated?.image || null,
+      // current_price may be null when Binance is throttled AND we have no
+      // last-known fallback yet — UI/orders surface 503 if they need to act.
       current_price: price,
       market_cap: meta.market_cap ?? null,
       price_change_percentage_24h: t ? parseFloat(t.priceChangePercent) : 0,
@@ -214,7 +311,9 @@ const marketDataService = {
       description: meta.description || ''
     };
 
-    cache.set(key, result, 20);
+    // Cache for longer when we have a real price; for empty/null prices keep
+    // the cache short so we retry sooner on the next request.
+    cache.set(key, result, price != null ? 30 : 8);
     return result;
   },
 

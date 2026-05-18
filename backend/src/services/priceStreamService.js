@@ -39,9 +39,16 @@ async function pollOnce() {
   if (!ids.length) return;
   try {
     const prices = await marketDataService.getPriceMap(ids);
+    // Keep only fresh, non-null prices so a transient upstream miss never
+    // overwrites a previously good value (no UI flicker to "—").
+    const fresh = {};
+    for (const [id, p] of Object.entries(prices)) {
+      if (p != null && !Number.isNaN(p)) fresh[id] = p;
+    }
+    if (!Object.keys(fresh).length) return;
     const ts = Date.now();
-    lastPrices = { ...lastPrices, ...prices };
-    broadcast({ type: 'prices', ts, prices });
+    lastPrices = { ...lastPrices, ...fresh };
+    broadcast({ type: 'prices', ts, prices: fresh });
   } catch (err) {
     logger.warn(`priceStream poll failed: ${err.message}`);
   }

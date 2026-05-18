@@ -1,192 +1,313 @@
 // src/services/marketDataService.js
-// Pulls live prices from CoinGecko. Caches results in-memory to respect rate limits
-// (CoinGecko free tier ~10-30 req/min). Falls back to a curated list if the API is down.
+// Two-source price strategy for accuracy + resilience:
+//   1) PRIMARY     : Binance public REST  -> live prices, 24h change
+//                    (same source as the TradingView chart, so prices match)
+//   2) METADATA    : CoinGecko             -> image, description, 7d/30d %
+// CoinGecko free tier often rate-limits cloud IPs (Railway, Vercel, etc.).
+// Falling back to Binance for prices avoids the stale "fallback" prices the
+// app used to show when CoinGecko blocked us.
 
 const axios = require('axios');
 const NodeCache = require('node-cache');
 const env = require('../config/env');
 const logger = require('../utils/logger');
+const { coinIdToBinanceSymbol } = require('../utils/binanceSymbol');
 
 const cache = new NodeCache({ stdTTL: env.PRICE_CACHE_TTL, checkperiod: 30 });
 
-const FALLBACK_COINS = [
-  { id: 'bitcoin',  symbol: 'BTC',  name: 'Bitcoin',     current_price: 65000,  price_change_percentage_24h: 0,  image: '' },
-  { id: 'ethereum', symbol: 'ETH',  name: 'Ethereum',    current_price: 3200,   price_change_percentage_24h: 0,  image: '' },
-  { id: 'solana',   symbol: 'SOL',  name: 'Solana',      current_price: 145,    price_change_percentage_24h: 0,  image: '' },
-  { id: 'cardano',  symbol: 'ADA',  name: 'Cardano',     current_price: 0.45,   price_change_percentage_24h: 0,  image: '' },
-  { id: 'ripple',   symbol: 'XRP',  name: 'XRP',         current_price: 0.55,   price_change_percentage_24h: 0,  image: '' },
-  { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin',    current_price: 0.12,   price_change_percentage_24h: 0,  image: '' },
-  { id: 'polkadot', symbol: 'DOT',  name: 'Polkadot',    current_price: 6.8,    price_change_percentage_24h: 0,  image: '' },
-  { id: 'chainlink',symbol: 'LINK', name: 'Chainlink',   current_price: 14,     price_change_percentage_24h: 0,  image: '' },
-  { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche', current_price: 28,    price_change_percentage_24h: 0,  image: '' },
-  { id: 'litecoin', symbol: 'LTC',  name: 'Litecoin',    current_price: 75,     price_change_percentage_24h: 0,  image: '' }
+const BINANCE_BASE = 'https://api.binance.com/api/v3';
+
+// Curated top-50 list (CoinGecko ids + symbols). Used when CoinGecko's /markets
+// endpoint is unavailable. Names/images stay reasonable; prices are filled
+// in live from Binance.
+const TOP_50 = [
+  { id: 'bitcoin',           symbol: 'BTC',   name: 'Bitcoin',         image: 'https://assets.coingecko.com/coins/images/1/large/bitcoin.png' },
+  { id: 'ethereum',          symbol: 'ETH',   name: 'Ethereum',        image: 'https://assets.coingecko.com/coins/images/279/large/ethereum.png' },
+  { id: 'tether',            symbol: 'USDT',  name: 'Tether',          image: 'https://assets.coingecko.com/coins/images/325/large/Tether.png' },
+  { id: 'binancecoin',       symbol: 'BNB',   name: 'BNB',             image: 'https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png' },
+  { id: 'solana',            symbol: 'SOL',   name: 'Solana',          image: 'https://assets.coingecko.com/coins/images/4128/large/solana.png' },
+  { id: 'usd-coin',          symbol: 'USDC',  name: 'USD Coin',        image: 'https://assets.coingecko.com/coins/images/6319/large/usdc.png' },
+  { id: 'ripple',            symbol: 'XRP',   name: 'XRP',             image: 'https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png' },
+  { id: 'dogecoin',          symbol: 'DOGE',  name: 'Dogecoin',        image: 'https://assets.coingecko.com/coins/images/5/large/dogecoin.png' },
+  { id: 'cardano',           symbol: 'ADA',   name: 'Cardano',         image: 'https://assets.coingecko.com/coins/images/975/large/cardano.png' },
+  { id: 'tron',              symbol: 'TRX',   name: 'TRON',            image: 'https://assets.coingecko.com/coins/images/1094/large/tron-logo.png' },
+  { id: 'avalanche-2',       symbol: 'AVAX',  name: 'Avalanche',       image: 'https://assets.coingecko.com/coins/images/12559/large/Avalanche_Circle_RedWhite_Trans.png' },
+  { id: 'chainlink',         symbol: 'LINK',  name: 'Chainlink',       image: 'https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png' },
+  { id: 'polkadot',          symbol: 'DOT',   name: 'Polkadot',        image: 'https://assets.coingecko.com/coins/images/12171/large/polkadot.png' },
+  { id: 'matic-network',     symbol: 'MATIC', name: 'Polygon',         image: 'https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png' },
+  { id: 'shiba-inu',         symbol: 'SHIB',  name: 'Shiba Inu',       image: 'https://assets.coingecko.com/coins/images/11939/large/shiba.png' },
+  { id: 'litecoin',          symbol: 'LTC',   name: 'Litecoin',        image: 'https://assets.coingecko.com/coins/images/2/large/litecoin.png' },
+  { id: 'bitcoin-cash',      symbol: 'BCH',   name: 'Bitcoin Cash',    image: 'https://assets.coingecko.com/coins/images/780/large/bitcoin-cash-circle.png' },
+  { id: 'uniswap',           symbol: 'UNI',   name: 'Uniswap',         image: 'https://assets.coingecko.com/coins/images/12504/large/uniswap-logo.png' },
+  { id: 'stellar',           symbol: 'XLM',   name: 'Stellar',         image: 'https://assets.coingecko.com/coins/images/100/large/Stellar_symbol_black_RGB.png' },
+  { id: 'cosmos',            symbol: 'ATOM',  name: 'Cosmos',          image: 'https://assets.coingecko.com/coins/images/1481/large/cosmos_hub.png' },
+  { id: 'monero',            symbol: 'XMR',   name: 'Monero',          image: 'https://assets.coingecko.com/coins/images/69/large/monero_logo.png' },
+  { id: 'aptos',             symbol: 'APT',   name: 'Aptos',           image: 'https://assets.coingecko.com/coins/images/26455/large/aptos_round.png' },
+  { id: 'arbitrum',          symbol: 'ARB',   name: 'Arbitrum',        image: 'https://assets.coingecko.com/coins/images/16547/large/photo_2023-03-29_21.47.00.jpeg' },
+  { id: 'optimism',          symbol: 'OP',    name: 'Optimism',        image: 'https://assets.coingecko.com/coins/images/25244/large/Optimism.png' },
+  { id: 'filecoin',          symbol: 'FIL',   name: 'Filecoin',        image: 'https://assets.coingecko.com/coins/images/12817/large/filecoin.png' },
+  { id: 'near',              symbol: 'NEAR',  name: 'NEAR Protocol',   image: 'https://assets.coingecko.com/coins/images/10365/large/near.jpg' },
+  { id: 'internet-computer', symbol: 'ICP',   name: 'Internet Computer', image: 'https://assets.coingecko.com/coins/images/14495/large/Internet_Computer_logo.png' },
+  { id: 'algorand',          symbol: 'ALGO',  name: 'Algorand',        image: 'https://assets.coingecko.com/coins/images/4380/large/download.png' },
+  { id: 'vechain',           symbol: 'VET',   name: 'VeChain',         image: 'https://assets.coingecko.com/coins/images/1167/large/VeChain-Logo-768x725.png' },
+  { id: 'hedera-hashgraph',  symbol: 'HBAR',  name: 'Hedera',          image: 'https://assets.coingecko.com/coins/images/3688/large/hbar.png' },
+  { id: 'aave',              symbol: 'AAVE',  name: 'Aave',            image: 'https://assets.coingecko.com/coins/images/12645/large/AAVE.png' },
+  { id: 'maker',             symbol: 'MKR',   name: 'Maker',           image: 'https://assets.coingecko.com/coins/images/1364/large/Mark_Maker.png' },
+  { id: 'the-graph',         symbol: 'GRT',   name: 'The Graph',       image: 'https://assets.coingecko.com/coins/images/13397/large/Graph_Token.png' },
+  { id: 'sui',               symbol: 'SUI',   name: 'Sui',             image: 'https://assets.coingecko.com/coins/images/26375/large/sui_asset.jpeg' },
+  { id: 'injective',         symbol: 'INJ',   name: 'Injective',       image: 'https://assets.coingecko.com/coins/images/12882/large/Secondary_Symbol.png' },
+  { id: 'render',            symbol: 'RNDR',  name: 'Render',          image: 'https://assets.coingecko.com/coins/images/11636/large/rndr.png' },
+  { id: 'fantom',            symbol: 'FTM',   name: 'Fantom',          image: 'https://assets.coingecko.com/coins/images/4001/large/Fantom_round.png' },
+  { id: 'ethereum-classic',  symbol: 'ETC',   name: 'Ethereum Classic',image: 'https://assets.coingecko.com/coins/images/453/large/ethereum-classic-logo.png' },
+  { id: 'pepe',              symbol: 'PEPE',  name: 'Pepe',            image: 'https://assets.coingecko.com/coins/images/29850/large/pepe-token.jpeg' },
+  { id: 'bonk',              symbol: 'BONK',  name: 'Bonk',            image: 'https://assets.coingecko.com/coins/images/28600/large/bonk.jpg' },
+  { id: 'pancakeswap',       symbol: 'CAKE',  name: 'PancakeSwap',     image: 'https://assets.coingecko.com/coins/images/12632/large/pancakeswap-cake-logo_%281%29.png' },
+  { id: 'curve-dao-token',   symbol: 'CRV',   name: 'Curve DAO',       image: 'https://assets.coingecko.com/coins/images/12124/large/Curve.png' },
+  { id: 'lido-dao',          symbol: 'LDO',   name: 'Lido DAO',        image: 'https://assets.coingecko.com/coins/images/13573/large/Lido_DAO.png' },
+  { id: 'worldcoin-wld',     symbol: 'WLD',   name: 'Worldcoin',       image: 'https://assets.coingecko.com/coins/images/31069/large/worldcoin.jpeg' },
+  { id: 'the-sandbox',       symbol: 'SAND',  name: 'The Sandbox',     image: 'https://assets.coingecko.com/coins/images/12129/large/sandbox_logo.jpg' },
+  { id: 'decentraland',      symbol: 'MANA',  name: 'Decentraland',    image: 'https://assets.coingecko.com/coins/images/878/large/decentraland-mana.png' },
+  { id: 'axie-infinity',     symbol: 'AXS',   name: 'Axie Infinity',   image: 'https://assets.coingecko.com/coins/images/13029/large/axie_infinity_logo.png' },
+  { id: 'dai',               symbol: 'DAI',   name: 'Dai',             image: 'https://assets.coingecko.com/coins/images/9956/large/Badge_Dai.png' },
+  { id: 'tezos',             symbol: 'XTZ',   name: 'Tezos',           image: 'https://assets.coingecko.com/coins/images/976/large/Tezos-logo.png' },
+  { id: 'eos',               symbol: 'EOS',   name: 'EOS',             image: 'https://assets.coingecko.com/coins/images/738/large/eos-eos-logo.png' }
 ];
+
+/* =========================================================================
+ * Binance helpers (the trusted live source)
+ * =======================================================================*/
+
+async function binance24hr(symbols) {
+  if (!symbols.length) return [];
+  try {
+    const params = symbols.length === 1
+      ? { symbol: symbols[0] }
+      : { symbols: JSON.stringify(symbols) };
+    const { data } = await axios.get(`${BINANCE_BASE}/ticker/24hr`, { params, timeout: 7000 });
+    return Array.isArray(data) ? data : [data];
+  } catch (err) {
+    logger.warn(`Binance 24hr failed (${symbols.length} symbols): ${err.message}`);
+    return [];
+  }
+}
+
+async function binancePrices(symbols) {
+  if (!symbols.length) return {};
+  try {
+    const params = symbols.length === 1
+      ? { symbol: symbols[0] }
+      : { symbols: JSON.stringify(symbols) };
+    const { data } = await axios.get(`${BINANCE_BASE}/ticker/price`, { params, timeout: 7000 });
+    const arr = Array.isArray(data) ? data : [data];
+    const out = {};
+    for (const row of arr) out[row.symbol] = parseFloat(row.price);
+    return out;
+  } catch (err) {
+    logger.warn(`Binance prices failed: ${err.message}`);
+    return {};
+  }
+}
+
+/* =========================================================================
+ * CoinGecko meta enrichment (best-effort, non-blocking)
+ * =======================================================================*/
+
+async function geckoCoin(coinId) {
+  try {
+    const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/coins/${coinId}`, {
+      params: { localization: false, tickers: false, community_data: false, developer_data: false, sparkline: false },
+      timeout: 6000
+    });
+    return {
+      image: data.image?.large || null,
+      description: (data.description?.en || '').split('. ')[0] || '',
+      market_cap: data.market_data?.market_cap?.usd ?? null,
+      price_change_percentage_7d:  data.market_data?.price_change_percentage_7d ?? null,
+      price_change_percentage_30d: data.market_data?.price_change_percentage_30d ?? null
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
+/* =========================================================================
+ * Public API
+ * =======================================================================*/
 
 const marketDataService = {
   /**
-   * Top N coins by market cap, with 24h price change.
+   * Top N coins by curated rank, prices live from Binance, 24h % from Binance.
    */
   async getTopCoins(limit = 50) {
     const key = `top_${limit}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
-    try {
-      const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/coins/markets`, {
-        params: {
-          vs_currency: 'usd',
-          order: 'market_cap_desc',
-          per_page: limit,
-          page: 1,
-          sparkline: false,
-          price_change_percentage: '24h'
-        },
-        timeout: 8000
-      });
-      const slim = data.map((c) => ({
+    const slice = TOP_50.slice(0, limit);
+    const symbols = slice
+      .map((c) => coinIdToBinanceSymbol(c.id, c.symbol))
+      .filter(Boolean);
+
+    const tickers = await binance24hr(symbols);
+    const tMap = new Map(tickers.map((t) => [t.symbol, t]));
+
+    const out = slice.map((c) => {
+      const bSym = coinIdToBinanceSymbol(c.id, c.symbol);
+      const t = bSym ? tMap.get(bSym) : null;
+      // Stablecoins (USDT itself etc.) — fall back to $1 if no ticker.
+      const isStable = c.id === 'tether' || c.id === 'usd-coin' || c.id === 'dai';
+      const price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
+      const pct24 = t ? parseFloat(t.priceChangePercent) : 0;
+      const vol   = t ? parseFloat(t.quoteVolume) : null;
+      return {
         id: c.id,
-        symbol: (c.symbol || '').toUpperCase(),
+        symbol: c.symbol,
         name: c.name,
         image: c.image,
-        current_price: c.current_price,
-        market_cap: c.market_cap,
-        price_change_percentage_24h: c.price_change_percentage_24h,
-        total_volume: c.total_volume
-      }));
-      cache.set(key, slim);
-      return slim;
-    } catch (err) {
-      logger.warn('CoinGecko getTopCoins failed, using fallback:', err.message);
-      return FALLBACK_COINS.slice(0, limit);
-    }
+        current_price: price,
+        price_change_percentage_24h: pct24,
+        total_volume: vol,
+        market_cap: null // unknown without CG; UI shows volume instead when null
+      };
+    });
+
+    cache.set(key, out, 20);
+    return out;
   },
 
   /**
-   * Get current price + meta for a single coin by CoinGecko id.
+   * Single-coin detail: live price + 24h from Binance, meta from CoinGecko.
    */
   async getCoin(coinId) {
     const key = `coin_${coinId}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
-    try {
-      const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/coins/${coinId}`, {
-        params: { localization: false, tickers: false, community_data: false, developer_data: false },
-        timeout: 8000
-      });
-      const slim = {
-        id: data.id,
-        symbol: (data.symbol || '').toUpperCase(),
-        name: data.name,
-        image: data.image?.large,
-        current_price: data.market_data?.current_price?.usd,
-        market_cap: data.market_data?.market_cap?.usd,
-        price_change_percentage_24h: data.market_data?.price_change_percentage_24h,
-        price_change_percentage_7d:  data.market_data?.price_change_percentage_7d,
-        price_change_percentage_30d: data.market_data?.price_change_percentage_30d,
-        description: data.description?.en?.split('. ')[0] || ''
-      };
-      cache.set(key, slim);
-      return slim;
-    } catch (err) {
-      logger.warn(`CoinGecko getCoin(${coinId}) failed:`, err.message);
-      const fb = FALLBACK_COINS.find((c) => c.id === coinId);
-      if (fb) return fb;
-      const e = new Error('Coin not found'); e.status = 404; throw e;
+    const curated = TOP_50.find((c) => c.id === coinId);
+    const symbolGuess = curated?.symbol || '';
+    const bSymbol = coinIdToBinanceSymbol(coinId, symbolGuess);
+
+    const [tickers, meta] = await Promise.all([
+      bSymbol ? binance24hr([bSymbol]) : Promise.resolve([]),
+      geckoCoin(coinId)
+    ]);
+    const t = tickers[0];
+
+    const isStable = coinId === 'tether' || coinId === 'usd-coin' || coinId === 'dai';
+    const price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
+
+    if (!price) {
+      const e = new Error('Live price unavailable for this coin'); e.status = 503; throw e;
     }
+
+    const result = {
+      id: coinId,
+      symbol: (curated?.symbol || coinId).toUpperCase(),
+      name: curated?.name || coinId,
+      image: meta.image || curated?.image || null,
+      current_price: price,
+      market_cap: meta.market_cap ?? null,
+      price_change_percentage_24h: t ? parseFloat(t.priceChangePercent) : 0,
+      price_change_percentage_7d:  meta.price_change_percentage_7d ?? null,
+      price_change_percentage_30d: meta.price_change_percentage_30d ?? null,
+      total_volume: t ? parseFloat(t.quoteVolume) : null,
+      description: meta.description || ''
+    };
+
+    cache.set(key, result, 20);
+    return result;
   },
 
   /**
-   * Historical chart data for sparkline / price chart. Days = 1, 7, 30.
+   * Historical chart. Binance klines are the most accurate match for the
+   * TradingView widget. Falls back to a flat-line synthetic series.
    */
   async getHistory(coinId, days = 7) {
     const key = `history_${coinId}_${days}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
+    const curated = TOP_50.find((c) => c.id === coinId);
+    const bSym = coinIdToBinanceSymbol(coinId, curated?.symbol || '');
+    if (!bSym) return [];
+
+    // Pick a sensible interval so we return ~120-200 points
+    const interval = days <= 1 ? '15m'
+                   : days <= 7 ? '1h'
+                   : days <= 30 ? '4h'
+                   : '1d';
+
     try {
-      const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/coins/${coinId}/market_chart`, {
-        params: { vs_currency: 'usd', days },
-        timeout: 8000
+      const { data } = await axios.get(`${BINANCE_BASE}/klines`, {
+        params: { symbol: bSym, interval, limit: 500 },
+        timeout: 7000
       });
-      // data.prices is [[timestampMs, price], ...]
-      const slim = data.prices.map(([t, p]) => ({ time: t, price: p }));
-      cache.set(key, slim, 300); // longer TTL for historical
+      const slim = data.map((k) => ({ time: k[0], price: parseFloat(k[4]) }));
+      cache.set(key, slim, 300);
       return slim;
     } catch (err) {
-      logger.warn(`CoinGecko getHistory(${coinId}) failed:`, err.message);
-      // Fabricate a flat line so the UI still renders
-      const now = Date.now();
-      const fb = FALLBACK_COINS.find((c) => c.id === coinId);
-      const base = fb?.current_price || 100;
-      const points = 50;
-      return Array.from({ length: points }).map((_, i) => ({
-        time: now - (points - i) * 60_000,
-        price: base
-      }));
+      logger.warn(`Binance klines failed (${bSym}): ${err.message}`);
+      return [];
     }
   },
 
   /**
-   * Returns map { coinId: priceUsd } for the given ids.
-   * Used by orderService and portfolioService for valuation.
+   * Bulk live prices, used by the WebSocket streamer and the limit-order worker.
+   * Returns map { coinId: priceUsd }.
    */
   async getPriceMap(coinIds) {
     if (!coinIds.length) return {};
-    const key = `priceMap_${coinIds.sort().join(',')}`;
+    const key = `priceMap_${[...coinIds].sort().join(',')}`;
     const cached = cache.get(key);
     if (cached) return cached;
 
-    try {
-      const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/simple/price`, {
-        params: { ids: coinIds.join(','), vs_currencies: 'usd' },
-        timeout: 8000
-      });
-      const map = {};
-      for (const id of coinIds) map[id] = data[id]?.usd ?? null;
-      cache.set(key, map, 30);
-      return map;
-    } catch (err) {
-      logger.warn('CoinGecko getPriceMap failed, using fallback:', err.message);
-      const map = {};
-      for (const id of coinIds) {
-        const fb = FALLBACK_COINS.find((c) => c.id === id);
-        map[id] = fb?.current_price ?? null;
+    // Build (coinId -> binanceSymbol) pairs that we know how to fetch
+    const pairs = coinIds.map((id) => {
+      const meta = TOP_50.find((c) => c.id === id);
+      return { id, sym: coinIdToBinanceSymbol(id, meta?.symbol || '') };
+    });
+    const symbols = pairs.map((p) => p.sym).filter(Boolean);
+
+    const priceBySymbol = await binancePrices(symbols);
+
+    const map = {};
+    for (const p of pairs) {
+      if (p.id === 'tether' || p.id === 'usd-coin' || p.id === 'dai') {
+        map[p.id] = priceBySymbol[p.sym] || 1;
+      } else {
+        map[p.id] = priceBySymbol[p.sym] ?? null;
       }
-      return map;
     }
+    cache.set(key, map, 8);
+    return map;
   },
 
   /**
-   * Search coins by free-text. Hits CoinGecko's /search endpoint.
+   * Search across the curated TOP_50 list. (CoinGecko search is still attempted
+   * for unknown queries; if it fails, we just return the curated subset.)
    */
   async searchCoins(query) {
     if (!query || query.length < 2) return [];
-    const key = `search_${query.toLowerCase()}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
+    const q = query.toLowerCase();
+    const curatedMatches = TOP_50
+      .filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q))
+      .slice(0, 15)
+      .map((c) => ({ id: c.id, symbol: c.symbol, name: c.name, image: c.image, market_cap_rank: null }));
+
+    if (curatedMatches.length >= 5) return curatedMatches;
 
     try {
       const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/search`, {
-        params: { query },
-        timeout: 8000
+        params: { query }, timeout: 5000
       });
-      const slim = (data.coins || []).slice(0, 15).map((c) => ({
-        id: c.id,
-        symbol: (c.symbol || '').toUpperCase(),
-        name: c.name,
-        image: c.thumb,
-        market_cap_rank: c.market_cap_rank
+      const fromGecko = (data.coins || []).slice(0, 15).map((c) => ({
+        id: c.id, symbol: (c.symbol || '').toUpperCase(), name: c.name,
+        image: c.thumb, market_cap_rank: c.market_cap_rank
       }));
-      cache.set(key, slim, 120);
-      return slim;
-    } catch (err) {
-      logger.warn('CoinGecko searchCoins failed:', err.message);
-      return FALLBACK_COINS
-        .filter((c) =>
-          c.name.toLowerCase().includes(query.toLowerCase()) ||
-          c.symbol.toLowerCase().includes(query.toLowerCase())
-        );
+      const seen = new Set(curatedMatches.map((c) => c.id));
+      return [...curatedMatches, ...fromGecko.filter((c) => !seen.has(c.id))].slice(0, 15);
+    } catch (_) {
+      return curatedMatches;
     }
   }
 };

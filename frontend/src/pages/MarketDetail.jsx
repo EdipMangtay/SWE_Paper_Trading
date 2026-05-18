@@ -8,10 +8,11 @@
 //
 // All mutations go through the orderApi and surface as toast notifications.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft, ArrowUpRight, ArrowDownRight, X, Wifi, WifiOff, Clock
+  ArrowLeft, ArrowUpRight, ArrowDownRight, X, Clock,
+  TrendingUp, TrendingDown
 } from 'lucide-react';
 import { marketApi, orderApi, portfolioApi } from '../services/api';
 import { Spinner } from '../components/Loading.jsx';
@@ -137,66 +138,77 @@ export default function MarketDetail() {
   if (loading && !coin) return <Spinner />;
   if (!coin) return null;
 
-  const isUp = (coin.price_change_percentage_24h ?? 0) >= 0;
+  const change24 = coin.price_change_percentage_24h ?? 0;
+  const isUp = change24 >= 0;
   const priceForDisplay = livePrice ?? coin.current_price;
 
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-3 lg:py-4">
       <Link
         to="/market"
-        className="inline-flex items-center gap-2 text-white/60 hover:text-white text-sm mb-3"
+        className="inline-flex items-center gap-2 text-white/55 hover:text-white text-sm mb-3 transition"
       >
         <ArrowLeft size={16} /> Back to market
       </Link>
 
       {/* Top ticker / header */}
-      <div className="card px-4 sm:px-5 py-3 mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="card px-4 sm:px-5 py-3.5 mb-3 flex flex-wrap items-center justify-between gap-3 card-in">
         <div className="flex items-center gap-3 min-w-0">
           {coin.image && (
-            <img src={coin.image} alt="" className="w-10 h-10 rounded-full flex-shrink-0" />
+            <div className="relative">
+              <img src={coin.image} alt="" className="w-11 h-11 rounded-full flex-shrink-0 ring-1 ring-white/10" />
+            </div>
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="font-display text-xl sm:text-2xl font-bold truncate">{coin.name}</h1>
               <span className="pill-mute">{coin.symbol}/USDT</span>
               <LiveBadge isLive={isLive} ts={liveTs} />
             </div>
-            <div className="text-[11px] text-white/40 font-mono uppercase tracking-wider">
-              Spot · Paper Trading
+            <div className="text-[10px] text-white/35 font-mono uppercase tracking-[0.18em] mt-0.5">
+              Spot · Paper Trading · via Binance
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-          <Stat
+        <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
+          <PriceStat
             label="Last price"
-            value={fmtUSD(priceForDisplay)}
-            valueClass={isUp ? 'text-accent-green' : 'text-accent-red'}
-            big
-            flashKey={priceForDisplay}
+            value={priceForDisplay}
+            isUp={isUp}
           />
           <Stat
             label="24h change"
             value={
-              <span className={`inline-flex items-center gap-1 ${pctClass(coin.price_change_percentage_24h)}`}>
+              <span className={`inline-flex items-center gap-1 ${pctClass(change24)}`}>
                 {isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {fmtPct(coin.price_change_percentage_24h)}
+                {fmtPct(change24)}
               </span>
             }
           />
-          <Stat label="7d" value={
-            <span className={pctClass(coin.price_change_percentage_7d)}>
-              {fmtPct(coin.price_change_percentage_7d)}
-            </span>
-          } />
-          <Stat label="30d" value={
-            <span className={pctClass(coin.price_change_percentage_30d)}>
-              {fmtPct(coin.price_change_percentage_30d)}
-            </span>
-          } />
+          {coin.price_change_percentage_7d != null && (
+            <Stat label="7d" value={
+              <span className={pctClass(coin.price_change_percentage_7d)}>
+                {fmtPct(coin.price_change_percentage_7d)}
+              </span>
+            } />
+          )}
+          {coin.price_change_percentage_30d != null && (
+            <Stat label="30d" value={
+              <span className={pctClass(coin.price_change_percentage_30d)}>
+                {fmtPct(coin.price_change_percentage_30d)}
+              </span>
+            } />
+          )}
           <Stat
-            label="Market cap"
-            value={coin.market_cap ? fmtUSD(coin.market_cap, { digits: 0 }) : '—'}
+            label={coin.market_cap ? 'Market cap' : '24h volume'}
+            value={
+              coin.market_cap
+                ? fmtUSD(coin.market_cap, { digits: 0 })
+                : coin.total_volume
+                  ? fmtUSD(coin.total_volume, { digits: 0 })
+                  : '—'
+            }
           />
         </div>
       </div>
@@ -229,8 +241,8 @@ export default function MarketDetail() {
 
         {/* CENTER — Chart */}
         <section className="lg:col-span-6 xl:col-span-6 order-1 lg:order-2 min-w-0">
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+          <div className="card overflow-hidden card-in">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-gradient-to-r from-ink-800/60 to-transparent">
               <div className="flex items-center gap-1">
                 {INTERVALS.map((it) => (
                   <button
@@ -238,19 +250,19 @@ export default function MarketDetail() {
                     onClick={() => setChartInterval(it.value)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-mono uppercase tracking-wider transition ${
                       chartInterval === it.value
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/50 hover:text-white hover:bg-white/5'
+                        ? 'bg-white/10 text-white shadow-inner'
+                        : 'text-white/45 hover:text-white hover:bg-white/5'
                     }`}
                   >
                     {it.label}
                   </button>
                 ))}
               </div>
-              <div className="text-[11px] text-white/40 font-mono">
-                {tvSymbol} · TradingView
+              <div className="text-[10px] text-white/35 font-mono tracking-wider">
+                {tvSymbol} <span className="text-white/20">·</span> TradingView
               </div>
             </div>
-            <div className="h-[480px] sm:h-[560px] lg:h-[620px]">
+            <div className="h-[460px] sm:h-[540px] lg:h-[620px]">
               <TradingViewChart symbol={tvSymbol} interval={chartInterval} />
             </div>
           </div>
@@ -271,8 +283,8 @@ export default function MarketDetail() {
       </div>
 
       {/* BOTTOM TABS */}
-      <div className="card mt-3 overflow-hidden">
-        <div className="flex border-b border-white/5 px-2">
+      <div className="card mt-3 overflow-hidden card-in">
+        <div className="flex border-b border-white/5 px-2 bg-gradient-to-r from-ink-800/60 to-transparent">
           <TabButton active={tab === 'positions'}     onClick={() => setTab('positions')}>
             Positions <Count n={portfolio?.holdings?.length || 0} />
           </TabButton>
@@ -285,8 +297,9 @@ export default function MarketDetail() {
         </div>
 
         {!user ? (
-          <div className="px-4 py-8 text-sm text-white/50 text-center">
-            Sign in to see your positions, open orders and trade history.
+          <div className="px-4 py-10 text-sm text-white/50 text-center">
+            <Link to="/login" className="text-accent-green hover:underline">Sign in</Link>
+            <span className="text-white/40"> to see your positions, open orders and trade history.</span>
           </div>
         ) : tab === 'positions' ? (
           <PositionsTable
@@ -312,28 +325,60 @@ export default function MarketDetail() {
 
 function LiveBadge({ isLive, ts }) {
   return (
-    <span className={`inline-flex items-center gap-1 pill ${isLive ? 'pill-green' : 'pill-mute'}`} title={ts ? `Last tick ${new Date(ts).toLocaleTimeString()}` : ''}>
-      {isLive ? <Wifi size={10} /> : <WifiOff size={10} />}
+    <span
+      className={`inline-flex items-center gap-1 pill ${isLive ? 'pill-green' : 'pill-mute'}`}
+      title={ts ? `Last tick ${new Date(ts).toLocaleTimeString()}` : ''}
+    >
+      <span className={isLive ? 'live-dot' : ''} />
       {isLive ? 'LIVE' : 'IDLE'}
     </span>
   );
 }
 
-function Stat({ label, value, valueClass = 'text-white', big = false, flashKey }) {
-  const [flash, setFlash] = useState(false);
+/**
+ * Big price stat with directional flash:
+ *   – flashes green when the new tick is higher than the previous,
+ *   – flashes red when lower,
+ *   – no flash on first render.
+ */
+function PriceStat({ label, value, isUp }) {
+  const prevRef = useRef(value);
+  const [flash, setFlash] = useState(null);
+
   useEffect(() => {
-    if (flashKey == null) return undefined;
-    setFlash(true);
-    const id = window.setTimeout(() => setFlash(false), 600);
-    return () => window.clearTimeout(id);
-  }, [flashKey]);
+    if (value == null) return undefined;
+    const prev = prevRef.current;
+    if (prev != null && prev !== value) {
+      setFlash(value > prev ? 'up' : 'down');
+      const id = window.setTimeout(() => setFlash(null), 700);
+      prevRef.current = value;
+      return () => window.clearTimeout(id);
+    }
+    prevRef.current = value;
+    return undefined;
+  }, [value]);
 
   return (
-    <div className={`leading-tight px-1.5 rounded-md ${flash ? 'tick-flash' : ''}`}>
-      <div className="text-[10px] uppercase tracking-wider text-white/40 font-mono">
+    <div className={`stat-tile leading-tight ${flash === 'up' ? 'tick-flash' : flash === 'down' ? 'tick-flash-down' : ''}`}>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono">
         {label}
       </div>
-      <div className={`font-mono ${big ? 'text-lg sm:text-xl font-bold' : 'text-sm'} ${valueClass}`}>
+      <div className={`font-mono text-xl sm:text-2xl font-bold tabular-nums ${
+        isUp ? 'text-accent-green' : 'text-accent-red'
+      }`}>
+        {fmtUSD(value)}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="stat-tile leading-tight">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono">
+        {label}
+      </div>
+      <div className="font-mono text-sm sm:text-[15px] tabular-nums">
         {value}
       </div>
     </div>
@@ -347,7 +392,7 @@ function TabButton({ active, onClick, children }) {
       className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
         active
           ? 'border-accent-green text-white'
-          : 'border-transparent text-white/55 hover:text-white'
+          : 'border-transparent text-white/50 hover:text-white'
       }`}
     >
       {children}
@@ -356,28 +401,30 @@ function TabButton({ active, onClick, children }) {
 }
 
 function Count({ n }) {
-  return <span className="ml-1.5 text-[10px] font-mono text-white/45">({n})</span>;
+  return <span className="ml-1.5 text-[10px] font-mono text-white/40">({n})</span>;
 }
 
 function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
   if (!authed) {
     return (
-      <div className="card p-4">
-        <div className="text-xs uppercase tracking-wider text-white/40 font-mono mb-2">
+      <div className="card p-4 card-in">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono mb-2">
           Your position
         </div>
-        <div className="text-sm text-white/50">Sign in to see your holdings.</div>
+        <div className="text-sm text-white/55">
+          <Link to="/login" className="text-accent-green hover:underline">Sign in</Link> to see your holdings.
+        </div>
       </div>
     );
   }
 
   if (!holding) {
     return (
-      <div className="card p-4">
-        <div className="text-xs uppercase tracking-wider text-white/40 font-mono mb-2">
+      <div className="card p-4 card-in">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono mb-2">
           Your position · {coin.symbol}
         </div>
-        <div className="text-sm text-white/50">
+        <div className="text-sm text-white/55">
           You don't hold any {coin.symbol} yet.
         </div>
       </div>
@@ -392,12 +439,13 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
   const positive = pnl >= 0;
 
   return (
-    <div className="card p-4 space-y-2.5">
+    <div className={`card p-4 space-y-2.5 card-in ${positive ? 'border-accent-green/20' : 'border-accent-red/20'}`}>
       <div className="flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wider text-white/40 font-mono">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono">
           Your position
         </div>
         <span className={positive ? 'pill-green' : 'pill-red'}>
+          {positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
           {positive ? '+' : ''}{fmtPct(pnlPct)}
         </span>
       </div>
@@ -428,7 +476,7 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
         disabled={closing}
         className="btn-danger w-full mt-1"
       >
-        {closing ? 'Closing…' : `Close Position (${positive ? 'TP' : 'SL'})`}
+        {closing ? 'Closing…' : `Close Position · ${positive ? 'Take Profit' : 'Stop Loss'}`}
       </button>
     </div>
   );
@@ -436,7 +484,7 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
 
 function PosRow({ k, v, bold }) {
   return (
-    <div className="flex items-center justify-between text-sm font-mono">
+    <div className="flex items-center justify-between text-sm font-mono tabular-nums">
       <span className="text-white/55">{k}</span>
       <span className={bold ? 'text-white font-semibold' : 'text-white'}>{v}</span>
     </div>
@@ -446,8 +494,8 @@ function PosRow({ k, v, bold }) {
 function AboutCard({ coin }) {
   if (!coin.description) return null;
   return (
-    <div className="card p-4">
-      <div className="text-xs uppercase tracking-wider text-white/40 font-mono mb-2">
+    <div className="card p-4 card-in">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono mb-2">
         About {coin.name}
       </div>
       <p className="text-white/65 text-sm leading-relaxed">{coin.description}.</p>
@@ -458,7 +506,7 @@ function AboutCard({ coin }) {
 function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingId }) {
   if (holdings.length === 0) {
     return (
-      <div className="px-4 py-8 text-sm text-white/40 text-center font-mono">
+      <div className="px-4 py-10 text-sm text-white/40 text-center font-mono">
         No open positions yet. Place an order from the panel on the left.
       </div>
     );
@@ -466,16 +514,16 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-white/5 text-[10px] uppercase tracking-wider text-white/50 font-mono">
+        <thead className="bg-white/5 text-[10px] uppercase tracking-[0.16em] text-white/45 font-mono">
           <tr>
-            <th className="text-left  px-3 py-2">Asset</th>
-            <th className="text-right px-3 py-2">Quantity</th>
-            <th className="text-right px-3 py-2">Entry</th>
-            <th className="text-right px-3 py-2">Mark</th>
-            <th className="text-right px-3 py-2">Value</th>
-            <th className="text-right px-3 py-2">PnL (Unreal.)</th>
-            <th className="text-left  px-3 py-2">Opened</th>
-            <th className="text-right px-3 py-2"></th>
+            <th className="text-left  px-3 py-2.5">Asset</th>
+            <th className="text-right px-3 py-2.5">Quantity</th>
+            <th className="text-right px-3 py-2.5">Entry</th>
+            <th className="text-right px-3 py-2.5">Mark</th>
+            <th className="text-right px-3 py-2.5">Value</th>
+            <th className="text-right px-3 py-2.5">PnL (Unreal.)</th>
+            <th className="text-left  px-3 py-2.5">Opened</th>
+            <th className="text-right px-3 py-2.5"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
@@ -487,7 +535,7 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
             return (
               <tr
                 key={h.coinId}
-                className={`hover:bg-white/5 transition ${h.coinId === currentCoinId ? 'bg-white/[0.025]' : ''}`}
+                className={`hover:bg-white/5 transition ${h.coinId === currentCoinId ? 'bg-white/[0.03]' : ''}`}
               >
                 <td className="px-3 py-2.5">
                   <Link to={`/market/${h.coinId}`} className="flex items-center gap-2 hover:text-accent-green">
@@ -495,11 +543,11 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
                     <span className="text-white/40 text-xs">{h.name}</span>
                   </Link>
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono">{fmtNum(h.quantity, 8)}</td>
-                <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(h.avgBuyPrice)}</td>
-                <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(mark)}</td>
-                <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(h.quantity * mark)}</td>
-                <td className={`px-3 py-2.5 text-right font-mono ${positive ? 'text-accent-green' : 'text-accent-red'}`}>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtNum(h.quantity, 8)}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(h.avgBuyPrice)}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(mark)}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(h.quantity * mark)}</td>
+                <td className={`px-3 py-2.5 text-right font-mono tabular-nums ${positive ? 'text-accent-green' : 'text-accent-red'}`}>
                   {positive ? '+' : ''}{fmtUSD(pnl)} <span className="text-white/40 text-xs">({fmtPct(pct)})</span>
                 </td>
                 <td className="px-3 py-2.5 text-left font-mono text-[11px] text-white/55">
@@ -533,7 +581,7 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
 function OrdersTable({ orders, onCancel, highlightCoinId }) {
   if (orders.length === 0) {
     return (
-      <div className="px-4 py-8 text-sm text-white/40 text-center font-mono">
+      <div className="px-4 py-10 text-sm text-white/40 text-center font-mono">
         No open orders.
       </div>
     );
@@ -541,21 +589,21 @@ function OrdersTable({ orders, onCancel, highlightCoinId }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-white/5 text-[10px] uppercase tracking-wider text-white/50 font-mono">
+        <thead className="bg-white/5 text-[10px] uppercase tracking-[0.16em] text-white/45 font-mono">
           <tr>
-            <th className="text-left  px-3 py-2">Time</th>
-            <th className="text-left  px-3 py-2">Asset</th>
-            <th className="text-right px-3 py-2">Side</th>
-            <th className="text-right px-3 py-2">Type</th>
-            <th className="text-right px-3 py-2">Qty</th>
-            <th className="text-right px-3 py-2">Price</th>
-            <th className="text-right px-3 py-2"></th>
+            <th className="text-left  px-3 py-2.5">Time</th>
+            <th className="text-left  px-3 py-2.5">Asset</th>
+            <th className="text-right px-3 py-2.5">Side</th>
+            <th className="text-right px-3 py-2.5">Type</th>
+            <th className="text-right px-3 py-2.5">Qty</th>
+            <th className="text-right px-3 py-2.5">Price</th>
+            <th className="text-right px-3 py-2.5"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {orders.map((o) => (
-            <tr key={o._id} className={`hover:bg-white/5 ${o.coinId === highlightCoinId ? 'bg-white/[0.025]' : ''}`}>
-              <td className="px-3 py-2.5 text-white/60 font-mono text-[11px]">
+            <tr key={o._id} className={`hover:bg-white/5 ${o.coinId === highlightCoinId ? 'bg-white/[0.03]' : ''}`}>
+              <td className="px-3 py-2.5 text-white/55 font-mono text-[11px]">
                 {new Date(o.createdAt).toLocaleString('en-US', {
                   month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
                 })}
@@ -572,11 +620,11 @@ function OrdersTable({ orders, onCancel, highlightCoinId }) {
               <td className="px-3 py-2.5 text-right">
                 <span className="pill-mute">{o.type}</span>
               </td>
-              <td className="px-3 py-2.5 text-right font-mono">{fmtNum(o.quantity, 8)}</td>
-              <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(o.price)}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtNum(o.quantity, 8)}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(o.price)}</td>
               <td className="px-3 py-2.5 text-right">
                 <button onClick={() => onCancel(o._id)} className="btn-ghost text-xs">
-                  <X size={12} className="mr-1" /> Cancel
+                  <X size={12} /> Cancel
                 </button>
               </td>
             </tr>
@@ -590,7 +638,7 @@ function OrdersTable({ orders, onCancel, highlightCoinId }) {
 function HistoryTable({ transactions }) {
   if (transactions.length === 0) {
     return (
-      <div className="px-4 py-8 text-sm text-white/40 text-center font-mono">
+      <div className="px-4 py-10 text-sm text-white/40 text-center font-mono">
         No trades yet for this market.
       </div>
     );
@@ -598,19 +646,19 @@ function HistoryTable({ transactions }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-white/5 text-[10px] uppercase tracking-wider text-white/50 font-mono">
+        <thead className="bg-white/5 text-[10px] uppercase tracking-[0.16em] text-white/45 font-mono">
           <tr>
-            <th className="text-left  px-3 py-2">Time</th>
-            <th className="text-right px-3 py-2">Side</th>
-            <th className="text-right px-3 py-2">Qty</th>
-            <th className="text-right px-3 py-2">Price</th>
-            <th className="text-right px-3 py-2">Total</th>
+            <th className="text-left  px-3 py-2.5">Time</th>
+            <th className="text-right px-3 py-2.5">Side</th>
+            <th className="text-right px-3 py-2.5">Qty</th>
+            <th className="text-right px-3 py-2.5">Price</th>
+            <th className="text-right px-3 py-2.5">Total</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {transactions.map((t) => (
             <tr key={t._id} className="hover:bg-white/5">
-              <td className="px-3 py-2.5 text-white/60 font-mono text-[11px]">
+              <td className="px-3 py-2.5 text-white/55 font-mono text-[11px]">
                 {new Date(t.createdAt).toLocaleString('en-US', {
                   month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
                 })}
@@ -618,9 +666,9 @@ function HistoryTable({ transactions }) {
               <td className="px-3 py-2.5 text-right">
                 <span className={t.side === 'BUY' ? 'pill-green' : 'pill-red'}>{t.side}</span>
               </td>
-              <td className="px-3 py-2.5 text-right font-mono">{fmtNum(t.quantity, 8)}</td>
-              <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(t.price)}</td>
-              <td className="px-3 py-2.5 text-right font-mono">{fmtUSD(t.total)}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtNum(t.quantity, 8)}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(t.price)}</td>
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(t.total)}</td>
             </tr>
           ))}
         </tbody>

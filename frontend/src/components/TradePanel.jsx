@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowUp, ArrowDown } from 'lucide-react';
 import { orderApi } from '../services/api';
 import { fmtUSD, fmtNum } from './format.js';
 
@@ -75,7 +76,7 @@ export default function TradePanel({
 
   if (!isAuthenticated) {
     return (
-      <div className="card p-5">
+      <div className="card p-5 card-in">
         <div className="text-sm text-white/70 mb-3">
           Sign in to place orders on <span className="text-white font-medium">{coin?.name}</span>.
         </div>
@@ -86,30 +87,41 @@ export default function TradePanel({
   }
 
   const isBuy = side === 'BUY';
+  const insufficientCash = isBuy && totalCost > cash + 0.0001 && totalCost > 0;
+  const insufficientQty  = !isBuy && parseFloat(qty || '0') > heldQty + 1e-12 && parseFloat(qty || '0') > 0;
+  const blocked = insufficientCash || insufficientQty;
 
   return (
-    <form onSubmit={submit} className="card p-4 space-y-3">
+    <form onSubmit={submit} className="card p-4 space-y-3 card-in">
+      {/* Side picker */}
       <div className="grid grid-cols-2 gap-1 p-1 bg-white/5 rounded-lg">
         <button
           type="button"
           onClick={() => setSide('BUY')}
           className={`py-2 rounded-md text-sm font-semibold tracking-wide transition ${
-            isBuy ? 'bg-accent-green text-ink-900 shadow-glow' : 'text-white/55 hover:text-white'
+            isBuy
+              ? 'bg-accent-green text-ink-900 glow-green'
+              : 'text-white/55 hover:text-white'
           }`}
         >
+          <ArrowUp size={14} className="inline -mt-0.5 mr-1" />
           BUY · LONG
         </button>
         <button
           type="button"
           onClick={() => setSide('SELL')}
           className={`py-2 rounded-md text-sm font-semibold tracking-wide transition ${
-            !isBuy ? 'bg-accent-red text-white' : 'text-white/55 hover:text-white'
+            !isBuy
+              ? 'bg-accent-red text-white glow-red'
+              : 'text-white/55 hover:text-white'
           }`}
         >
+          <ArrowDown size={14} className="inline -mt-0.5 mr-1" />
           SELL · SHORT
         </button>
       </div>
 
+      {/* Type picker */}
       <div className="grid grid-cols-2 gap-1 p-1 bg-white/5 rounded-lg">
         {['MARKET', 'LIMIT'].map((t) => (
           <button
@@ -117,7 +129,7 @@ export default function TradePanel({
             type="button"
             onClick={() => setType(t)}
             className={`py-1.5 rounded-md text-xs font-mono uppercase tracking-wider transition ${
-              type === t ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'
+              type === t ? 'bg-white/10 text-white shadow-inner' : 'text-white/45 hover:text-white'
             }`}
           >
             {t}
@@ -125,18 +137,19 @@ export default function TradePanel({
         ))}
       </div>
 
+      {/* Price */}
       <div>
         <label className="label flex items-center justify-between">
           <span>Price (USD)</span>
-          <span className="text-[10px] font-mono text-white/40 uppercase">
-            {type === 'MARKET' ? 'Mark' : 'Limit'}
+          <span className="text-[10px] font-mono text-white/35 normal-case">
+            {type === 'MARKET' ? 'Live · mark' : 'Trigger price'}
           </span>
         </label>
         <div className="relative">
           <input
             type="number"
             step="any"
-            className="input font-mono pr-12"
+            className="input font-mono pr-12 tabular-nums"
             value={type === 'LIMIT' ? limitPrice : (livePrice ? livePrice.toString() : '')}
             onChange={(e) => setLimitPrice(e.target.value)}
             disabled={type === 'MARKET'}
@@ -148,11 +161,15 @@ export default function TradePanel({
         </div>
       </div>
 
+      {/* Amount */}
       <div>
         <label className="label flex items-center justify-between">
           <span>Amount ({coin?.symbol})</span>
-          <span className="text-[10px] font-mono text-white/40">
-            {side === 'BUY' ? `Avail. ${fmtUSD(cash)}` : `Held ${fmtNum(heldQty, 6)} ${coin?.symbol}`}
+          <span className="text-[10px] font-mono text-white/35 normal-case tracking-normal">
+            {side === 'BUY'
+              ? <>Avail. <span className="text-white/65 tabular-nums">{fmtUSD(cash)}</span></>
+              : <>Held <span className="text-white/65 tabular-nums">{fmtNum(heldQty, 6)}</span> {coin?.symbol}</>
+            }
           </span>
         </label>
         <div className="relative">
@@ -160,7 +177,9 @@ export default function TradePanel({
             type="number"
             step="any"
             required
-            className="input font-mono pr-14"
+            className={`input font-mono pr-14 tabular-nums ${
+              blocked ? 'border-accent-red/50 focus:ring-accent-red/40 focus:border-accent-red/50' : ''
+            }`}
             value={qty}
             onChange={(e) => { setQty(e.target.value); setPct(0); }}
             placeholder="0.00"
@@ -176,10 +195,11 @@ export default function TradePanel({
               key={p}
               type="button"
               onClick={() => applyPercent(p)}
-              className={`text-[11px] font-mono py-1 rounded-md transition ${
+              className={`text-[11px] font-mono py-1.5 rounded-md transition ${
                 pct === p
-                  ? (isBuy ? 'bg-accent-green/25 text-accent-green' : 'bg-accent-red/25 text-accent-red')
-                  : 'bg-white/5 hover:bg-white/10 text-white/60'
+                  ? (isBuy ? 'bg-accent-green/25 text-accent-green border border-accent-green/30'
+                           : 'bg-accent-red/25 text-accent-red border border-accent-red/30')
+                  : 'bg-white/5 hover:bg-white/10 text-white/55 border border-transparent'
               }`}
             >
               {Math.round(p * 100)}%
@@ -188,20 +208,27 @@ export default function TradePanel({
         </div>
       </div>
 
-      <div className="rounded-lg bg-white/5 px-3 py-2.5 space-y-1.5 text-xs font-mono">
+      {/* Order summary */}
+      <div className="rounded-lg bg-white/5 border border-white/5 px-3 py-2.5 space-y-1.5 text-xs font-mono">
         <Row k="Order type" v={`${type} ${side}`} />
         <Row k="Price used" v={usePrice ? fmtUSD(usePrice) : '—'} />
-        <Row k="Total" v={fmtUSD(totalCost)} accent={isBuy ? 'text-accent-green' : 'text-accent-red'} />
+        <Row k="Total"      v={fmtUSD(totalCost)} accent={isBuy ? 'text-accent-green' : 'text-accent-red'} />
         {side === 'BUY'
-          ? <Row k="After trade · cash" v={fmtUSD(Math.max(cash - totalCost, 0))} muted />
-          : <Row k="After trade · qty"  v={`${fmtNum(Math.max(heldQty - parseFloat(qty || '0'), 0), 6)} ${coin?.symbol}`} muted />
+          ? <Row k="After · cash" v={fmtUSD(Math.max(cash - totalCost, 0))} muted />
+          : <Row k="After · qty"  v={`${fmtNum(Math.max(heldQty - parseFloat(qty || '0'), 0), 6)} ${coin?.symbol}`} muted />
         }
       </div>
 
+      {blocked && (
+        <div className="text-[11px] text-accent-red font-mono px-1">
+          {insufficientCash ? 'Not enough cash for this trade.' : 'You don\'t hold that much of this asset.'}
+        </div>
+      )}
+
       <button
         type="submit"
-        disabled={submitting}
-        className={isBuy ? 'btn-primary w-full py-3' : 'btn-danger w-full py-3'}
+        disabled={submitting || blocked}
+        className={`${isBuy ? 'btn-primary' : 'btn-danger'} w-full py-3 text-[13px] tracking-wide`}
       >
         {submitting
           ? 'Submitting…'
@@ -214,8 +241,8 @@ export default function TradePanel({
 function Row({ k, v, accent, muted }) {
   return (
     <div className="flex items-center justify-between">
-      <span className={muted ? 'text-white/35' : 'text-white/55'}>{k}</span>
-      <span className={accent ? `${accent} font-bold` : 'text-white'}>{v}</span>
+      <span className={muted ? 'text-white/35' : 'text-white/50'}>{k}</span>
+      <span className={`tabular-nums ${accent ? `${accent} font-bold` : 'text-white'}`}>{v}</span>
     </div>
   );
 }

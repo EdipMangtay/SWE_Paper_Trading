@@ -9,8 +9,9 @@
   body {
     @apply bg-ink-900 text-white font-body antialiased;
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 70%),
-      radial-gradient(ellipse 80% 50% at 100% 100%, rgba(16, 185, 129, 0.08), transparent 70%);
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.10), transparent 70%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(59, 130, 246, 0.08), transparent 70%),
+      radial-gradient(ellipse 70% 50% at 0% 100%,  rgba(245, 158, 11, 0.05), transparent 70%);
     background-attachment: fixed;
   }
   ::selection { background: rgba(16,185,129,.35); }
@@ -18,35 +19,57 @@
 
 @layer components {
   .card {
-    @apply bg-ink-800/70 backdrop-blur border border-white/5 rounded-2xl;
+    @apply bg-ink-800/70 backdrop-blur-md border border-white/5 rounded-2xl;
   }
+  .card-hover {
+    @apply card transition hover:border-white/10 hover:bg-ink-800/85;
+  }
+
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition;
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg font-medium transition
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-green/40;
   }
   .btn-primary {
-    @apply btn bg-accent-green text-ink-900 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply btn bg-accent-green text-ink-900 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed
+           shadow-[0_8px_30px_-12px_rgba(16,185,129,0.6)];
   }
   .btn-danger {
-    @apply btn bg-accent-red text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply btn bg-accent-red text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed
+           shadow-[0_8px_30px_-12px_rgba(239,68,68,0.6)];
   }
   .btn-ghost {
-    @apply btn bg-white/5 text-white hover:bg-white/10;
+    @apply btn bg-white/5 text-white hover:bg-white/10 border border-white/5 hover:border-white/10;
   }
   .input {
-    @apply w-full bg-ink-700/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/40
-           focus:outline-none focus:ring-2 focus:ring-accent-green/40 focus:border-accent-green/40 transition;
+    @apply w-full bg-ink-700/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/40
+           focus:outline-none focus:ring-2 focus:ring-accent-green/40 focus:border-accent-green/40
+           disabled:opacity-60 transition;
   }
   .label {
-    @apply block text-sm text-white/70 mb-1.5 font-medium;
+    @apply block text-xs text-white/55 mb-1.5 font-medium uppercase tracking-wider font-mono;
   }
   .pill {
-    @apply inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono uppercase tracking-wider;
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono uppercase tracking-wider;
   }
   .pill-green { @apply pill bg-accent-green/15 text-accent-green border border-accent-green/30; }
-  .pill-red   { @apply pill bg-accent-red/15   text-accent-red   border border-accent-red/30; }
-  .pill-gold  { @apply pill bg-accent-gold/15  text-accent-gold  border border-accent-gold/30; }
-  .pill-blue  { @apply pill bg-accent-blue/15  text-accent-blue  border border-accent-blue/30; }
+  .pill-red   { @apply pill bg-accent-red/15   text-accent-red   border border-accent-red/30;   }
+  .pill-gold  { @apply pill bg-accent-gold/15  text-accent-gold  border border-accent-gold/30;  }
+  .pill-blue  { @apply pill bg-accent-blue/15  text-accent-blue  border border-accent-blue/30;  }
   .pill-mute  { @apply pill bg-white/5 text-white/60 border border-white/10; }
+
+  .stat-tile {
+    @apply rounded-lg px-2.5 py-1.5 transition;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #10B981 0%, #3B82F6 50%, #F59E0B 100%);
+  }
+
+  /* Logo / brand mark glow used on Navbar + Landing */
+  .brand-glow {
+    box-shadow: 0 0 24px rgba(16,185,129,0.35), inset 0 0 8px rgba(255,255,255,0.1);
+  }
 }
 
 /* Scrollbar styling */
@@ -64,7 +87,71 @@
 /* Subtle live-tick pulse for the ticker price */
 @keyframes priceTick {
   0%   { background-color: rgba(255,255,255,0); }
-  20%  { background-color: rgba(255,255,255,0.06); }
+  20%  { background-color: rgba(16,185,129,0.10); }
   100% { background-color: rgba(255,255,255,0); }
 }
-.tick-flash { animation: priceTick 600ms ease-out; }
+.tick-flash { animation: priceTick 700ms ease-out; }
+
+@keyframes priceTickDown {
+  0%   { background-color: rgba(255,255,255,0); }
+  20%  { background-color: rgba(239,68,68,0.10); }
+  100% { background-color: rgba(255,255,255,0); }
+}
+.tick-flash-down { animation: priceTickDown 700ms ease-out; }
+
+/* Soft pulse for LIVE dots */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+  50%      { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+}
+.live-dot::before {
+  content: '';
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 9999px;
+  background: #10B981;
+  margin-right: 6px;
+  animation: livePulse 1.8s ease-out infinite;
+  vertical-align: middle;
+}
+
+/* Horizontal scrolling ticker bar marquee */
+@keyframes tickerMarquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.ticker-marquee {
+  animation: tickerMarquee 40s linear infinite;
+}
+.ticker-marquee:hover { animation-play-state: paused; }
+
+/* Hero / title shimmer for the landing page */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    rgba(255,255,255,0.9) 0%,
+    rgba(16,185,129,0.95) 30%,
+    rgba(255,255,255,0.9) 60%,
+    rgba(59,130,246,0.95) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+/* Card fade-in for staggered grids */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-in { animation: cardIn 400ms ease-out both; }
+
+/* Glow ring used on the active BUY/SELL tab */
+.glow-green { box-shadow: 0 0 0 1px rgba(16,185,129,0.35), 0 4px 20px -4px rgba(16,185,129,0.5); }
+.glow-red   { box-shadow: 0 0 0 1px rgba(239,68,68,0.35),  0 4px 20px -4px rgba(239,68,68,0.5);  }

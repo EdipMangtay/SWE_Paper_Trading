@@ -1,6 +1,6 @@
 // Embeds the official TradingView "Advanced Chart" widget.
-// Free, full drawing tools, indicators, intervals — the same UI as tradingview.com.
 //
+// Themed to match the rest of the UI (dark, brand greens/reds, no logo seam).
 // Robust against React 18 StrictMode double-mounting: we only rebuild the
 // widget when the (symbol, interval, theme) tuple actually changes, never on
 // the throwaway second mount cycle.
@@ -13,8 +13,8 @@ export default function TradingViewChart({
   theme = 'dark',
   className = ''
 }) {
-  const hostRef     = useRef(null);
-  const lastKeyRef  = useRef('');
+  const hostRef    = useRef(null);
+  const lastKeyRef = useRef('');
 
   useEffect(() => {
     const host = hostRef.current;
@@ -45,8 +45,9 @@ export default function TradingViewChart({
       style: '1',
       locale: 'en',
       enable_publishing: false,
-      backgroundColor: 'rgba(17,24,39,1)',
-      gridColor: 'rgba(255,255,255,0.05)',
+      backgroundColor: 'rgba(10,14,26,1)',          // ink-900
+      gridColor: 'rgba(255,255,255,0.04)',
+      toolbar_bg: 'rgba(10,14,26,1)',
       hide_top_toolbar: false,
       hide_legend: false,
       hide_side_toolbar: false,
@@ -56,7 +57,21 @@ export default function TradingViewChart({
       details: false,
       hide_volume: false,
       studies: ['STD;EMA', 'STD;Volume'],
-      support_host: 'https://www.tradingview.com'
+      support_host: 'https://www.tradingview.com',
+      overrides: {
+        'paneProperties.background': 'rgba(10,14,26,1)',
+        'paneProperties.backgroundType': 'solid',
+        'paneProperties.vertGridProperties.color': 'rgba(255,255,255,0.04)',
+        'paneProperties.horzGridProperties.color': 'rgba(255,255,255,0.04)',
+        'scalesProperties.textColor': 'rgba(255,255,255,0.55)',
+        'scalesProperties.lineColor': 'rgba(255,255,255,0.06)',
+        'mainSeriesProperties.candleStyle.upColor':     '#10B981',
+        'mainSeriesProperties.candleStyle.downColor':   '#EF4444',
+        'mainSeriesProperties.candleStyle.borderUpColor':   '#10B981',
+        'mainSeriesProperties.candleStyle.borderDownColor': '#EF4444',
+        'mainSeriesProperties.candleStyle.wickUpColor':     '#10B981',
+        'mainSeriesProperties.candleStyle.wickDownColor':   '#EF4444'
+      }
     });
     host.appendChild(script);
   }, [symbol, interval, theme]);

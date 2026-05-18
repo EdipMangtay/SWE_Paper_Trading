@@ -3,13 +3,16 @@
 > **Software Architecture · Phase 2 Final Submission**  
 > Istinye University · Software Engineering · Assoc. Prof. Dr. Bahman Arasteh
 
-A risk-free crypto trading simulator backed by live market data. Users start with **$100,000** in paper cash, place **market** and **limit** orders, track portfolios with live prices, and compete on the leaderboard.
+A risk-free crypto trading simulator backed by live market data. Users start with **$100,000** in paper cash, place **market** and **limit** orders, **close positions** at market with realized P&L, watch live prices stream over WebSocket, and compete on the leaderboard. The trading screen embeds the full **TradingView Advanced Chart** so users get every drawing tool, indicator and timeframe — just like a real exchange.
 
 ```
-Architecture:     Layered Architecture + REST API
+Architecture:     Layered Architecture + REST API + WebSocket price stream
 View model:       Kruchten 4+1 View Model
-Stack:            Node.js + Express + MongoDB · React + Vite + Tailwind
+Stack:            Node.js + Express + MongoDB + ws · React + Vite + Tailwind
+Chart:            TradingView Advanced Chart (free embed)
 External API:     CoinGecko (free tier)
+Deployment:       Dockerfile + docker-compose (one command)
+Tests:            Jest + Supertest (27 tests, in-memory MongoDB)
 ```
 
 ---
@@ -29,12 +32,14 @@ External API:     CoinGecko (free tier)
 
 ## Quick start
 
-### Requirements
+> **Want one command?** Skip to [Docker](#docker-one-command-deployment) — `docker compose up --build` boots everything (Mongo + API + SPA) on **http://localhost:8080**.
+
+### Requirements (manual mode)
 
 - **Node.js 18+** ([nodejs.org](https://nodejs.org))
 - **MongoDB** (optional in development — see below) — pick one:
   - **MongoDB Atlas** (recommended — free cluster) → [cloud.mongodb.com](https://cloud.mongodb.com)
-  - **Docker** → `docker run -d -p 27017:27017 --name mongo mongo:6`
+  - **Docker** → `docker run -d -p 27017:27017 --name mongo mongo:7`
   - **Local install** → [mongodb.com/try/download/community](https://www.mongodb.com/try/download/community)
 
 ### 1. Backend
@@ -80,6 +85,37 @@ curl http://localhost:5002/api/market/prices?limit=5
 # Or via the dev server proxy
 curl http://localhost:5173/api/health
 ```
+
+### 4. Tests
+
+```bash
+cd backend
+npm test
+# 3 suites · 27 tests · ~5s · uses mongodb-memory-server (no real DB needed)
+```
+
+---
+
+## Docker (one-command deployment)
+
+The project ships with production-ready Dockerfiles for both API and SPA plus a
+`docker-compose.yml` that wires them up with MongoDB:
+
+```bash
+# Copy + edit the production env (set a real JWT_SECRET!)
+cp backend/.env.production.example backend/.env.production
+
+# Boot everything (Mongo 7 + Express + nginx-served SPA)
+docker compose up --build
+```
+
+| Service | Image | Port | Notes |
+|---|---|---|---|
+| `mongo` | `mongo:7` | (internal) | Persistent named volume `mongo_data` |
+| `backend` | built from `backend/Dockerfile` | `5002` (internal) | Non-root user, healthcheck on `/api/health` |
+| `frontend` | nginx serving the Vite build | **`8080`** (host) | Proxies `/api` and `/ws` to backend |
+
+Open **http://localhost:8080** — you now have a fully wired exchange (REST + WebSocket + live chart) on a single host.
 
 ---
 
@@ -157,6 +193,36 @@ paper-trading/
 │
 └── README.md
 ```
+
+---
+
+## Exchange-style trading screen
+
+Open `/market/:coinId` (e.g. **/market/bitcoin**) to enter the exchange UI:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ Coin · symbol/USDT · LIVE PRICE (WS) · 24h / 7d / 30d · MktCap   │
+├──────────┬──────────────────────────────────────┬────────────────┤
+│  BUY/    │                                       │  YOUR POSITION │
+│  SELL    │   TRADINGVIEW ADVANCED CHART          │  entry · mark  │
+│  panel   │   (15m / 1H / 4H / 1D / 1W +          │  unrealised PnL│
+│ (sticky) │    drawing tools + indicators)        │  [Close (TP/SL)]│
+├──────────┴──────────────────────────────────────┴────────────────┤
+│ Tabs:  Positions  |  Open Orders  |  Market History              │
+│ (close any position, cancel any order from one panel)            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Highlights:
+
+- **Live prices** stream over a single WebSocket connection (`ws://.../ws`); the
+  backend broadcasts every 10 s for the union of coins subscribed across all tabs.
+- **Position lifecycle** tracks `openedAt` / `lastTradeAt` on every fill so the
+  UI can show **entry time** and a one-click **Close Position** button that
+  reports the realized P&L as a toast.
+- **Toast notifications** + a React `ErrorBoundary` keep the UX smooth even
+  when CoinGecko / the network hiccup.
 
 ---
 
@@ -255,9 +321,24 @@ All routes are under `/api`. Mutations require **JWT** (`Authorization: Bearer <
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/orders` | JWT | Create order |
+| POST | `/api/orders` | JWT | Create order (MARKET fills instantly, LIMIT goes to PENDING) |
+| POST | `/api/orders/close` | JWT | Close the entire open position at market price (returns realized P&L) |
 | GET | `/api/orders?status=PENDING` | JWT | List orders |
-| DELETE | `/api/orders/:id` | JWT | Cancel |
+| DELETE | `/api/orders/:id` | JWT | Cancel a PENDING order |
+
+### WebSocket — live price stream
+
+| URL | Description |
+|---|---|
+| `ws://<host>/ws` | Subscribe to live prices for any CoinGecko id |
+
+```js
+const ws = new WebSocket('ws://localhost:5002/ws');
+ws.onopen    = () => ws.send(JSON.stringify({ action: 'subscribe', coinIds: ['bitcoin', 'ethereum'] }));
+ws.onmessage = (e) => console.log(JSON.parse(e.data));
+//   { type: 'hello',  ts: 1779... }
+//   { type: 'prices', ts: 1779..., prices: { bitcoin: 76800, ethereum: 2100 } }
+```
 
 ### Portfolio
 

@@ -21,6 +21,13 @@ router.post(
   orderController.create
 );
 
+router.post(
+  '/close',
+  [body('coinId').isString().notEmpty()],
+  validate,
+  orderController.closePosition
+);
+
 router.get('/', orderController.list);
 router.delete('/:id', orderController.cancel);
 

@@ -54,3 +54,17 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+
+/* Toast fade-in animation (used by Toast.jsx) */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtle live-tick pulse for the ticker price */
+@keyframes priceTick {
+  0%   { background-color: rgba(255,255,255,0); }
+  20%  { background-color: rgba(255,255,255,0.06); }
+  100% { background-color: rgba(255,255,255,0); }
+}
+.tick-flash { animation: priceTick 600ms ease-out; }

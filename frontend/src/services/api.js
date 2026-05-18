@@ -50,7 +50,8 @@ export const marketApi = {
 export const orderApi = {
   create: (payload)  => api.post('/orders', payload).then((r) => r.data.order),
   list:   (status)   => api.get('/orders', { params: status ? { status } : {} }).then((r) => r.data.orders),
-  cancel: (id)       => api.delete(`/orders/${id}`).then((r) => r.data.order)
+  cancel: (id)       => api.delete(`/orders/${id}`).then((r) => r.data.order),
+  close:  (coinId)   => api.post('/orders/close', { coinId }).then((r) => r.data)
 };
 
 // ---- Portfolio ----

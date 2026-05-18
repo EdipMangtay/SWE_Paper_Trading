@@ -105,13 +105,16 @@ const orderService = {
 
       // Add or merge holding
       const idx = portfolio.assets.findIndex((a) => a.coinId === order.coinId);
+      const now = new Date();
       if (idx === -1) {
         portfolio.assets.push({
           symbol: order.symbol,
           coinId: order.coinId,
           name: order.name,
           quantity: order.quantity,
-          avgBuyPrice: executedPrice
+          avgBuyPrice: executedPrice,
+          openedAt: now,
+          lastTradeAt: now
         });
       } else {
         const existing = portfolio.assets[idx];
@@ -121,6 +124,8 @@ const orderService = {
           (existing.avgBuyPrice * existing.quantity + executedPrice * order.quantity) / newQty;
         existing.quantity = newQty;
         existing.avgBuyPrice = round8(newAvg);
+        existing.lastTradeAt = now;
+        if (!existing.openedAt) existing.openedAt = now;
       }
       await portfolioRepository.save(portfolio);
     } else {
@@ -135,6 +140,7 @@ const orderService = {
       }
       const existing = portfolio.assets[idx];
       existing.quantity = round8(existing.quantity - order.quantity);
+      existing.lastTradeAt = new Date();
       if (existing.quantity <= 1e-12) {
         portfolio.assets.splice(idx, 1); // close position
       }
@@ -168,6 +174,49 @@ const orderService = {
     );
 
     return filled;
+  },
+
+  /**
+   * Close an entire open position at the current market price. Emits a
+   * synthetic MARKET SELL order so the trade history stays consistent.
+   * Returns { order, realizedPnl, realizedPnlPct }.
+   */
+  async closePosition(userId, coinId) {
+    if (!coinId) throw httpError(400, 'coinId is required');
+
+    const portfolio = await portfolioRepository.findOrCreate(userId);
+    const asset = portfolio.assets.find((a) => a.coinId === coinId);
+    if (!asset || asset.quantity <= 0) {
+      throw httpError(404, 'No open position for this asset');
+    }
+
+    const coin = await marketDataService.getCoin(coinId);
+    const livePrice = coin.current_price;
+    if (!livePrice) throw httpError(503, 'Live price unavailable');
+
+    const qty = asset.quantity;
+    const entryPrice = asset.avgBuyPrice;
+
+    const order = await orderRepository.create({
+      user: userId,
+      symbol: asset.symbol,
+      coinId: asset.coinId,
+      name: asset.name,
+      type: 'MARKET',
+      side: 'SELL',
+      quantity: qty,
+      price: livePrice,
+      status: 'PENDING'
+    });
+
+    const filled = await orderService._executeOrder(order, livePrice);
+
+    const realizedPnl    = round2((livePrice - entryPrice) * qty);
+    const realizedPnlPct = entryPrice > 0
+      ? round2(((livePrice - entryPrice) / entryPrice) * 100)
+      : 0;
+
+    return { order: filled, realizedPnl, realizedPnlPct, entryPrice, exitPrice: livePrice };
   },
 
   async cancelOrder(userId, orderId) {

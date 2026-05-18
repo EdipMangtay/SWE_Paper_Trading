@@ -9,6 +9,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5002',
         changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:5002',
+        ws: true,
+        changeOrigin: true
       }
     }
   }

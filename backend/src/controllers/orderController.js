@@ -22,6 +22,13 @@ const orderController = {
       const order = await orderService.cancelOrder(req.user.id, req.params.id);
       res.json({ order });
     } catch (err) { next(err); }
+  },
+
+  async closePosition(req, res, next) {
+    try {
+      const result = await orderService.closePosition(req.user.id, req.body.coinId);
+      res.status(201).json(result);
+    } catch (err) { next(err); }
   }
 };
 

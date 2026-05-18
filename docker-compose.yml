@@ -1,0 +1,70 @@
+# Paper Trading — full-stack one-command boot.
+#
+# Run:
+#   cp backend/.env.production.example backend/.env.production    # edit JWT_SECRET!
+#   docker compose up --build
+#
+# Services
+#   mongo     : MongoDB 7 persistent on a named volume
+#   backend   : Express REST API + WebSocket on :5002
+#   frontend  : nginx-served SPA on :8080 (reverse-proxies /api and /ws)
+#
+# Open http://localhost:8080 to use the app.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: paper-trading-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - paper-trading
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: paper-trading-backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env.production
+    environment:
+      # Compose-level overrides win over .env.production for these
+      MONGODB_URI: mongodb://mongo:27017/paper-trading
+      NODE_ENV: production
+      PORT: "5002"
+      CLIENT_URL: http://localhost:8080
+    expose:
+      - "5002"
+    networks:
+      - paper-trading
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: paper-trading-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - paper-trading
+
+volumes:
+  mongo_data:
+
+networks:
+  paper-trading:
+    driver: bridge

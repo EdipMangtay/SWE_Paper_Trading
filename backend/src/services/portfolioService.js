@@ -35,7 +35,9 @@ const portfolioService = {
         value,
         cost,
         pnl,
-        pnlPct
+        pnlPct,
+        openedAt:    a.openedAt    || a.lastTradeAt || null,
+        lastTradeAt: a.lastTradeAt || a.openedAt   || null
       };
     });
 

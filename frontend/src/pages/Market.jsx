@@ -80,7 +80,7 @@ export default function Market() {
                       {c.market_cap ? fmtUSD(c.market_cap, { digits: 0 }) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/trade/${c.id}`} className="btn-ghost text-xs">Trade</Link>
+                      <Link to={`/market/${c.id}`} className="btn-ghost text-xs">Trade</Link>
                     </td>
                   </tr>
                 ))}

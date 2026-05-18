@@ -6,6 +6,7 @@ const env = require('./config/env');
 const logger = require('./utils/logger');
 const { connectDB } = require('./config/db');
 const orderService = require('./services/orderService');
+const priceStreamService = require('./services/priceStreamService');
 const User = require('./models/User');
 const Portfolio = require('./models/Portfolio');
 
@@ -38,6 +39,8 @@ async function start() {
     logger.info(`Server listening on http://localhost:${env.PORT}  (${env.NODE_ENV})`);
   });
 
+  priceStreamService.attach(server);
+
   // Limit order worker - runs every 30s
   const intervalMs = 30_000;
   const worker = setInterval(async () => {
@@ -54,6 +57,7 @@ async function start() {
   function shutdown(sig) {
     logger.info(`${sig} received, shutting down`);
     clearInterval(worker);
+    priceStreamService.stop();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10_000).unref();
   }

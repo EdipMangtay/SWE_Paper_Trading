@@ -97,7 +97,7 @@ export default function Portfolio() {
                       <div className="text-xs">{fmtPct(h.pnlPct)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/trade/${h.coinId}?side=SELL`} className="btn-ghost text-xs">Sell</Link>
+                      <Link to={`/market/${h.coinId}?side=SELL`} className="btn-ghost text-xs">Sell</Link>
                     </td>
                   </tr>
                 ))}

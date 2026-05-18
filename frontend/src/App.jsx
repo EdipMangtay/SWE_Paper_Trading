@@ -1,8 +1,15 @@
 // src/App.jsx
 // Top-level router. Routes are gated by ProtectedRoute / AdminRoute.
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
+
+// Legacy /trade/:coinId redirects to the new exchange-style /market/:coinId
+function TradeRedirect() {
+  const { coinId } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/market/${coinId}${search}`} replace />;
+}
 
 import Navbar         from './components/Navbar.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -13,7 +20,6 @@ import Landing        from './pages/Landing.jsx';
 import Dashboard      from './pages/Dashboard.jsx';
 import Market         from './pages/Market.jsx';
 import MarketDetail   from './pages/MarketDetail.jsx';
-import Trade          from './pages/Trade.jsx';
 import Portfolio      from './pages/Portfolio.jsx';
 import Orders         from './pages/Orders.jsx';
 import Leaderboard    from './pages/Leaderboard.jsx';
@@ -35,7 +41,7 @@ export default function App() {
           <Route path="/dashboard"        element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/market"           element={<Market />} />
           <Route path="/market/:coinId"   element={<MarketDetail />} />
-          <Route path="/trade/:coinId"    element={<ProtectedRoute><Trade /></ProtectedRoute>} />
+          <Route path="/trade/:coinId"    element={<TradeRedirect />} />
           <Route path="/portfolio"        element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
           <Route path="/orders"           element={<ProtectedRoute><Orders /></ProtectedRoute>} />
           <Route path="/leaderboard"      element={<Leaderboard />} />

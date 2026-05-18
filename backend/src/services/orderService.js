@@ -22,6 +22,16 @@ function httpError(status, message) {
   const e = new Error(message); e.status = status; return e;
 }
 
+/** Use REST price paths for execution; may supplement getCoin when cache missed. */
+async function resolveLiveUsdPrice(coinId, coin) {
+  let p = coin?.current_price;
+  if (p != null && !Number.isNaN(p) && p > 0) return p;
+  const pm = await marketDataService.getPriceMap([coinId]);
+  p = pm[coinId];
+  if (p != null && !Number.isNaN(p) && p > 0) return p;
+  return null;
+}
+
 const orderService = {
   /**
    * Create + (when MARKET) immediately execute an order.
@@ -41,7 +51,7 @@ const orderService = {
     }
 
     const coin = await marketDataService.getCoin(coinId);
-    const livePrice = coin.current_price;
+    const livePrice = await resolveLiveUsdPrice(coinId, coin);
     if (!livePrice) throw httpError(503, 'Live price unavailable');
 
     const order = await orderRepository.create({
@@ -103,9 +113,11 @@ const orderService = {
       user.cashBalance = round2(user.cashBalance - total);
       await user.save();
 
-      // Add or merge holding
+      // Cover shorts first, then add / average into long.
       const idx = portfolio.assets.findIndex((a) => a.coinId === order.coinId);
       const now = new Date();
+      let remaining = order.quantity;
+
       if (idx === -1) {
         portfolio.assets.push({
           symbol: order.symbol,
@@ -113,41 +125,92 @@ const orderService = {
           name: order.name,
           quantity: order.quantity,
           avgBuyPrice: executedPrice,
+          shortQuantity: 0,
+          avgShortPrice: 0,
           openedAt: now,
           lastTradeAt: now
         });
       } else {
         const existing = portfolio.assets[idx];
-        const newQty = existing.quantity + order.quantity;
-        // Weighted-average cost basis
-        const newAvg =
-          (existing.avgBuyPrice * existing.quantity + executedPrice * order.quantity) / newQty;
-        existing.quantity = newQty;
-        existing.avgBuyPrice = round8(newAvg);
+        const longQty = existing.quantity || 0;
+        const shortQty = existing.shortQuantity || 0;
+
+        const cover = Math.min(remaining, shortQty);
+        if (cover > 0) {
+          existing.shortQuantity = round8(shortQty - cover);
+          if (existing.shortQuantity <= 1e-12) {
+            existing.shortQuantity = 0;
+            existing.avgShortPrice = 0;
+          }
+          remaining -= cover;
+        }
+
+        if (remaining > 0) {
+          const newLong = longQty + remaining;
+          const newAvg = longQty <= 1e-12
+            ? executedPrice
+            : (existing.avgBuyPrice * longQty + executedPrice * remaining) / newLong;
+          existing.quantity = round8(newLong);
+          existing.avgBuyPrice = round8(newAvg);
+          if (!existing.openedAt) existing.openedAt = now;
+        }
         existing.lastTradeAt = now;
-        if (!existing.openedAt) existing.openedAt = now;
+
+        if ((existing.quantity || 0) <= 1e-12 && (existing.shortQuantity || 0) <= 1e-12) {
+          portfolio.assets.splice(idx, 1);
+        }
       }
       await portfolioRepository.save(portfolio);
     } else {
-      // SELL
+      // SELL: close long first; remainder opens / increases paper short.
       const idx = portfolio.assets.findIndex((a) => a.coinId === order.coinId);
-      if (idx === -1 || portfolio.assets[idx].quantity < order.quantity) {
+      const existing = idx === -1 ? null : portfolio.assets[idx];
+      const longQty = existing ? (existing.quantity || 0) : 0;
+      const sellFromLong = Math.min(order.quantity, longQty);
+      const toShort = order.quantity - sellFromLong;
+      const now = new Date();
+
+      if (!existing && toShort <= 0) {
         await orderRepository.updateStatus(order._id, {
           status: 'CANCELLED',
           cancelledAt: new Date()
         });
         throw httpError(400, 'Insufficient asset balance');
       }
-      const existing = portfolio.assets[idx];
-      existing.quantity = round8(existing.quantity - order.quantity);
-      existing.lastTradeAt = new Date();
-      if (existing.quantity <= 1e-12) {
-        portfolio.assets.splice(idx, 1); // close position
+
+      if (existing) {
+        if (sellFromLong > 0) existing.quantity = round8(longQty - sellFromLong);
+        if (toShort > 0) {
+          const prevS = existing.shortQuantity || 0;
+          const newS = prevS + toShort;
+          const newAvgShort = prevS <= 1e-12
+            ? executedPrice
+            : (existing.avgShortPrice * prevS + executedPrice * toShort) / newS;
+          existing.shortQuantity = round8(newS);
+          existing.avgShortPrice = round8(newAvgShort);
+          if (!existing.openedAt) existing.openedAt = now;
+        }
+        existing.lastTradeAt = now;
+        if ((existing.quantity || 0) <= 1e-12 && (existing.shortQuantity || 0) <= 1e-12) {
+          portfolio.assets.splice(idx, 1);
+        }
+      } else {
+        portfolio.assets.push({
+          symbol: order.symbol,
+          coinId: order.coinId,
+          name: order.name,
+          quantity: 0,
+          avgBuyPrice: 0,
+          shortQuantity: round8(toShort),
+          avgShortPrice: executedPrice,
+          openedAt: now,
+          lastTradeAt: now
+        });
       }
-      await portfolioRepository.save(portfolio);
 
       user.cashBalance = round2(user.cashBalance + total);
       await user.save();
+      await portfolioRepository.save(portfolio);
     }
 
     const filled = await orderRepository.updateStatus(order._id, {
@@ -186,36 +249,54 @@ const orderService = {
 
     const portfolio = await portfolioRepository.findOrCreate(userId);
     const asset = portfolio.assets.find((a) => a.coinId === coinId);
-    if (!asset || asset.quantity <= 0) {
+    const longQty = asset ? (asset.quantity || 0) : 0;
+    const shortQty = asset ? (asset.shortQuantity || 0) : 0;
+    if (!asset || (longQty <= 0 && shortQty <= 0)) {
       throw httpError(404, 'No open position for this asset');
     }
 
     const coin = await marketDataService.getCoin(coinId);
-    const livePrice = coin.current_price;
+    const livePrice = await resolveLiveUsdPrice(coinId, coin);
     if (!livePrice) throw httpError(503, 'Live price unavailable');
 
-    const qty = asset.quantity;
-    const entryPrice = asset.avgBuyPrice;
+    if (longQty > 0) {
+      const entryPrice = asset.avgBuyPrice;
+      const order = await orderRepository.create({
+        user: userId,
+        symbol: asset.symbol,
+        coinId: asset.coinId,
+        name: asset.name,
+        type: 'MARKET',
+        side: 'SELL',
+        quantity: longQty,
+        price: livePrice,
+        status: 'PENDING'
+      });
+      const filled = await orderService._executeOrder(order, livePrice);
+      const realizedPnl    = round2((livePrice - entryPrice) * longQty);
+      const realizedPnlPct = entryPrice > 0
+        ? round2(((livePrice - entryPrice) / entryPrice) * 100)
+        : 0;
+      return { order: filled, realizedPnl, realizedPnlPct, entryPrice, exitPrice: livePrice };
+    }
 
+    const entryPrice = asset.avgShortPrice || 0;
     const order = await orderRepository.create({
       user: userId,
       symbol: asset.symbol,
       coinId: asset.coinId,
       name: asset.name,
       type: 'MARKET',
-      side: 'SELL',
-      quantity: qty,
+      side: 'BUY',
+      quantity: shortQty,
       price: livePrice,
       status: 'PENDING'
     });
-
     const filled = await orderService._executeOrder(order, livePrice);
-
-    const realizedPnl    = round2((livePrice - entryPrice) * qty);
+    const realizedPnl    = round2((entryPrice - livePrice) * shortQty);
     const realizedPnlPct = entryPrice > 0
-      ? round2(((livePrice - entryPrice) / entryPrice) * 100)
+      ? round2(((entryPrice - livePrice) / entryPrice) * 100)
       : 0;
-
     return { order: filled, realizedPnl, realizedPnlPct, entryPrice, exitPrice: livePrice };
   },
 

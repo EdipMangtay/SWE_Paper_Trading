@@ -18,28 +18,48 @@ const portfolioService = {
     const priceMap = await marketDataService.getPriceMap(ids);
 
     let assetsValue = 0;
-    const holdings = portfolio.assets.map((a) => {
-      const currentPrice = priceMap[a.coinId] ?? a.avgBuyPrice;
-      const value = a.quantity * currentPrice;
-      const cost  = a.quantity * a.avgBuyPrice;
-      const pnl   = value - cost;
-      const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-      assetsValue += value;
-      return {
-        symbol: a.symbol,
-        coinId: a.coinId,
-        name: a.name,
-        quantity: a.quantity,
-        avgBuyPrice: a.avgBuyPrice,
-        currentPrice,
-        value,
-        cost,
-        pnl,
-        pnlPct,
-        openedAt:    a.openedAt    || a.lastTradeAt || null,
-        lastTradeAt: a.lastTradeAt || a.openedAt   || null
-      };
-    });
+    const holdings = portfolio.assets
+      .map((a) => {
+        const longQty = a.quantity || 0;
+        const shortQty = a.shortQuantity || 0;
+        const cp = priceMap[a.coinId];
+        const currentPrice =
+          cp != null && !Number.isNaN(cp)
+            ? cp
+            : (longQty > 0 ? a.avgBuyPrice : (shortQty > 0 ? (a.avgShortPrice || 0) : a.avgBuyPrice));
+
+        const longValue = longQty * currentPrice;
+        const shortLiab = shortQty * currentPrice;
+        const longCost = longQty * (a.avgBuyPrice || 0);
+        const shortEntry = shortQty * (a.avgShortPrice || 0);
+        const pnlLong = longValue - longCost;
+        const pnlShort = shortEntry - shortLiab;
+        const pnl = pnlLong + pnlShort;
+        const exposureCost = longCost + shortEntry;
+        const pnlPct = exposureCost > 0 ? (pnl / exposureCost) * 100 : 0;
+        const netValue = longValue - shortLiab;
+        assetsValue += netValue;
+
+        return {
+          symbol: a.symbol,
+          coinId: a.coinId,
+          name: a.name,
+          quantity: longQty,
+          shortQuantity: shortQty,
+          avgBuyPrice: a.avgBuyPrice,
+          avgShortPrice: a.avgShortPrice || 0,
+          currentPrice,
+          value: netValue,
+          cost: exposureCost,
+          pnl,
+          pnlPct,
+          pnlLong,
+          pnlShort,
+          openedAt:    a.openedAt    || a.lastTradeAt || null,
+          lastTradeAt: a.lastTradeAt || a.openedAt   || null
+        };
+      })
+      .filter((h) => h.quantity > 1e-12 || h.shortQuantity > 1e-12);
 
     const totalValue = user.cashBalance + assetsValue;
     // Use process.env directly to avoid a circular import

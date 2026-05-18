@@ -80,13 +80,34 @@ describe('MARKET orders', () => {
     expect(res.body.message).toMatch(/Insufficient/i);
   });
 
-  it('rejects a SELL without holding', async () => {
+  it('opens a paper SHORT when selling more than you hold', async () => {
     const { token } = await registerUser();
     const res = await request(app)
       .post('/api/orders').set(auth(token))
-      .send({ coinId: 'bitcoin', type: 'MARKET', side: 'SELL', quantity: 1 });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/Insufficient asset/i);
+      .send({ coinId: 'bitcoin', type: 'MARKET', side: 'SELL', quantity: 0.5 });
+    expect(res.status).toBe(201);
+    expect(res.body.order.status).toBe('FILLED');
+
+    const pf = await request(app).get('/api/portfolio').set(auth(token));
+    expect(pf.body.holdings).toHaveLength(1);
+    const h = pf.body.holdings[0];
+    expect(h.shortQuantity).toBeCloseTo(0.5, 8);
+    expect(h.quantity).toBeCloseTo(0, 8);
+    expect(pf.body.cashBalance).toBeCloseTo(100000 + 0.5 * 50000, 2);
+  });
+
+  it('covers a short when buying; excess becomes long', async () => {
+    const { token } = await registerUser();
+    await request(app).post('/api/orders').set(auth(token))
+      .send({ coinId: 'bitcoin', type: 'MARKET', side: 'SELL', quantity: 0.2 });
+    const res = await request(app).post('/api/orders').set(auth(token))
+      .send({ coinId: 'bitcoin', type: 'MARKET', side: 'BUY', quantity: 0.35 });
+    expect(res.status).toBe(201);
+
+    const pf = await request(app).get('/api/portfolio').set(auth(token));
+    const h = pf.body.holdings[0];
+    expect(h.shortQuantity || 0).toBeCloseTo(0, 8);
+    expect(h.quantity).toBeCloseTo(0.15, 8);
   });
 
   it('weighted-average cost basis: buying twice averages the entry', async () => {
@@ -166,6 +187,26 @@ describe('POST /api/orders/close — close position at market', () => {
     expect(pf.body.holdings).toHaveLength(0);
     // Started at 100 000 → spent 6 000 → received 7 000 = 101 000
     expect(pf.body.cashBalance).toBeCloseTo(101000, 2);
+  });
+
+  it('closes a SHORT by market BUY and reports realized P&L', async () => {
+    const { token } = await registerUser();
+
+    await request(app).post('/api/orders').set(auth(token))
+      .send({ coinId: 'ethereum', type: 'MARKET', side: 'SELL', quantity: 2 }); // short @ 3 000
+
+    marketStub.__state.coins.ethereum.current_price = 2500;
+
+    const closed = await request(app).post('/api/orders/close').set(auth(token))
+      .send({ coinId: 'ethereum' });
+
+    expect(closed.status).toBe(201);
+    expect(closed.body.realizedPnl).toBeCloseTo((3000 - 2500) * 2, 2);
+    expect(closed.body.entryPrice).toBe(3000);
+    expect(closed.body.exitPrice).toBe(2500);
+
+    const pf = await request(app).get('/api/portfolio').set(auth(token));
+    expect(pf.body.holdings).toHaveLength(0);
   });
 
   it('returns 404 when there is no open position to close', async () => {

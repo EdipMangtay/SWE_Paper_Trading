@@ -9,8 +9,10 @@ const assetSchema = new mongoose.Schema(
     symbol: { type: String, required: true, uppercase: true }, // e.g. BTC, ETH
     coinId: { type: String, required: true },                  // CoinGecko id, e.g. bitcoin
     name:   { type: String, required: true },                  // display name
-    quantity: { type: Number, required: true, min: 0 },
-    avgBuyPrice: { type: Number, required: true, min: 0 },     // USD
+    quantity: { type: Number, required: true, min: 0 },        // long size
+    avgBuyPrice: { type: Number, required: true, min: 0 },     // USD, long avg
+    shortQuantity: { type: Number, default: 0, min: 0 },
+    avgShortPrice: { type: Number, default: 0, min: 0 },        // USD, short avg entry
     // Position lifecycle: openedAt is the timestamp of the first BUY that took
     // the position from zero to positive. It survives subsequent partial sells
     // and weighted-average adds. lastTradeAt updates on every fill.

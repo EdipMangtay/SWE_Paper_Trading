@@ -26,8 +26,14 @@ const leaderboardService = {
         const cash = p.user.cashBalance ?? 0;
         let assetsValue = 0;
         for (const a of p.assets) {
-          const cp = priceMap[a.coinId] ?? a.avgBuyPrice;
-          assetsValue += a.quantity * cp;
+          const cp = priceMap[a.coinId];
+          const mark =
+            cp != null && !Number.isNaN(cp)
+              ? cp
+              : ((a.quantity || 0) > 0 ? a.avgBuyPrice : (a.shortQuantity || 0) > 0 ? (a.avgShortPrice || 0) : a.avgBuyPrice);
+          const longV = (a.quantity || 0) * mark;
+          const shortL = (a.shortQuantity || 0) * mark;
+          assetsValue += longV - shortL;
         }
         const totalValue = cash + assetsValue;
         const pnl = totalValue - env.INITIAL_BALANCE;

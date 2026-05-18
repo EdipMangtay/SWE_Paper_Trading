@@ -401,7 +401,12 @@ const marketDataService = {
       description: meta.description || ''
     };
 
-    cache.set(key, result, price != null ? 30 : 8);
+    // Only cache successful prices. Caching null/invalid prices caused trading
+    // endpoints to keep returning "Live price unavailable" while the UI still
+    // showed a mark from WebSocket or a parallel fresh fetch.
+    if (price != null && !Number.isNaN(price) && price > 0) {
+      cache.set(key, result, 30);
+    }
     return result;
   },
 

@@ -39,17 +39,29 @@ export default function Portfolio() {
   const live = useMemo(() => {
     if (!portfolio) return null;
     const holdings = (portfolio.holdings || []).map((h) => {
-      const mark = livePrices[h.coinId] ?? h.currentPrice ?? h.avgBuyPrice;
-      const value = h.quantity * mark;
-      const cost  = h.quantity * h.avgBuyPrice;
-      const pnl   = value - cost;
+      const longQ = h.quantity || 0;
+      const shortQ = h.shortQuantity || 0;
+      const mark = livePrices[h.coinId] ?? h.currentPrice ?? (longQ > 1e-12 ? h.avgBuyPrice : h.avgShortPrice);
+      const longVal = longQ * mark;
+      const shortLiab = shortQ * mark;
+      const value = longVal - shortLiab;
+      const longCost = longQ * (h.avgBuyPrice || 0);
+      const shortCost = shortQ * (h.avgShortPrice || 0);
+      const cost = longCost + shortCost;
+      const pnl = (longVal - longCost) + (shortCost - shortLiab);
       const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-      return { ...h, mark, value, pnl, pnlPct };
+      return {
+        ...h, mark, value, cost, pnl, pnlPct,
+        qtyLabel: shortQ > 1e-12 && longQ < 1e-12
+          ? `${fmtNum(shortQ, 8)} short`
+          : fmtNum(longQ, 8),
+        avgLabel: shortQ > 1e-12 && longQ < 1e-12 ? h.avgShortPrice : h.avgBuyPrice
+      };
     });
     const assetsValue = holdings.reduce((s, h) => s + h.value, 0);
     const totalValue  = (portfolio.cashBalance || 0) + assetsValue;
-    const totalCost   = holdings.reduce((s, h) => s + h.quantity * h.avgBuyPrice, 0);
-    const totalPnl    = assetsValue - totalCost;
+    const totalCost   = holdings.reduce((s, h) => s + h.cost, 0);
+    const totalPnl    = holdings.reduce((s, h) => s + h.pnl, 0);
     const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
     return { ...portfolio, holdings, assetsValue, totalValue, totalPnl, totalPnlPct };
   }, [portfolio, livePrices]);
@@ -151,8 +163,8 @@ export default function Portfolio() {
                           <div className="text-xs text-white/40 font-mono">{h.symbol}</div>
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">{fmtNum(h.quantity, 8)}</td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-white/55 hidden sm:table-cell">{fmtUSD(h.avgBuyPrice)}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums">{h.qtyLabel}</td>
+                      <td className="px-4 py-3 text-right font-mono tabular-nums text-white/55 hidden sm:table-cell">{fmtUSD(h.avgLabel)}</td>
                       <td className="px-4 py-3 text-right font-mono tabular-nums hidden sm:table-cell">{fmtUSD(h.mark)}</td>
                       <td className="px-4 py-3 text-right font-mono tabular-nums font-medium">{fmtUSD(h.value)}</td>
                       <td className={`px-4 py-3 text-right font-mono tabular-nums ${pos ? 'text-accent-green' : 'text-accent-red'}`}>

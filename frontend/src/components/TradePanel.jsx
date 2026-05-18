@@ -28,6 +28,7 @@ export default function TradePanel({
   const livePrice = coin?.current_price || 0;
   const holding   = portfolio?.holdings?.find((h) => h.coinId === coin?.id);
   const heldQty   = holding?.quantity || 0;
+  const shortQty  = holding?.shortQuantity || 0;
   const cash      = portfolio?.cashBalance || 0;
 
   useEffect(() => {
@@ -49,8 +50,10 @@ export default function TradePanel({
     setPct(p);
     if (side === 'BUY') {
       if (usePrice > 0) setQty(((cash * p) / usePrice).toFixed(8));
-    } else {
+    } else if (heldQty > 1e-12) {
       setQty((heldQty * p).toFixed(8));
+    } else if (usePrice > 0) {
+      setQty(((cash * p) / usePrice).toFixed(8));
     }
   }
 
@@ -88,8 +91,7 @@ export default function TradePanel({
 
   const isBuy = side === 'BUY';
   const insufficientCash = isBuy && totalCost > cash + 0.0001 && totalCost > 0;
-  const insufficientQty  = !isBuy && parseFloat(qty || '0') > heldQty + 1e-12 && parseFloat(qty || '0') > 0;
-  const blocked = insufficientCash || insufficientQty;
+  const blocked = insufficientCash;
 
   return (
     <form onSubmit={submit} className="card p-4 space-y-3 card-in">
@@ -168,7 +170,11 @@ export default function TradePanel({
           <span className="text-[10px] font-mono text-white/35 normal-case tracking-normal">
             {side === 'BUY'
               ? <>Avail. <span className="text-white/65 tabular-nums">{fmtUSD(cash)}</span></>
-              : <>Held <span className="text-white/65 tabular-nums">{fmtNum(heldQty, 6)}</span> {coin?.symbol}</>
+              : <>
+                  Long <span className="text-white/65 tabular-nums">{fmtNum(heldQty, 6)}</span>
+                  <span className="text-white/25 mx-1">·</span>
+                  Short <span className="text-white/65 tabular-nums">{fmtNum(shortQty, 6)}</span>
+                </>
             }
           </span>
         </label>
@@ -215,13 +221,26 @@ export default function TradePanel({
         <Row k="Total"      v={fmtUSD(totalCost)} accent={isBuy ? 'text-accent-green' : 'text-accent-red'} />
         {side === 'BUY'
           ? <Row k="After · cash" v={fmtUSD(Math.max(cash - totalCost, 0))} muted />
-          : <Row k="After · qty"  v={`${fmtNum(Math.max(heldQty - parseFloat(qty || '0'), 0), 6)} ${coin?.symbol}`} muted />
+          : (() => {
+              const q = parseFloat(qty || '0');
+              if (!(q > 0)) return <Row k="After · long" v={`${fmtNum(heldQty, 6)} ${coin?.symbol}`} muted />;
+              const fromLong = Math.min(q, heldQty);
+              const toShort = Math.max(q - heldQty, 0);
+              return (
+                <>
+                  <Row k="After · long" v={`${fmtNum(Math.max(heldQty - fromLong, 0), 6)} ${coin?.symbol}`} muted />
+                  {toShort > 1e-12 && (
+                    <Row k="After · short" v={`${fmtNum(shortQty + toShort, 6)} ${coin?.symbol}`} muted />
+                  )}
+                </>
+              );
+            })()
         }
       </div>
 
       {blocked && (
         <div className="text-[11px] text-accent-red font-mono px-1">
-          {insufficientCash ? 'Not enough cash for this trade.' : 'You don\'t hold that much of this asset.'}
+          Not enough cash for this trade.
         </div>
       )}
 

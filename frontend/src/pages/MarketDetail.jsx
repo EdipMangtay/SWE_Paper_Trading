@@ -118,7 +118,13 @@ export default function MarketDetail() {
 
   async function closePosition(coin_) {
     if (!coin_?.coinId) return;
-    if (!window.confirm(`Close ${coin_.quantity} ${coin_.symbol} at market price?`)) return;
+    const longQ = coin_.quantity || 0;
+    const shortQ = coin_.shortQuantity || 0;
+    const msg =
+      longQ > 1e-12
+        ? `Close long ${fmtNum(longQ, 8)} ${coin_.symbol} at market?`
+        : `Cover short ${fmtNum(shortQ, 8)} ${coin_.symbol} at market?`;
+    if (!window.confirm(msg)) return;
     setClosing(coin_.coinId);
     try {
       const res = await orderApi.close(coin_.coinId);
@@ -423,13 +429,63 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
           Your position · {coin.symbol}
         </div>
         <div className="text-sm text-white/55">
-          You don't hold any {coin.symbol} yet.
+          No open long or short on {coin.symbol} yet.
         </div>
       </div>
     );
   }
 
-  const qty   = holding.quantity;
+  const longQ  = holding.quantity || 0;
+  const shortQ = holding.shortQuantity || 0;
+
+  if (shortQ > 1e-12 && longQ < 1e-12) {
+    const entry = holding.avgShortPrice || 0;
+    const liability = shortQ * mark;
+    const pnl   = (entry - mark) * shortQ;
+    const pnlPct = entry > 0 ? ((entry - mark) / entry) * 100 : 0;
+    const positive = pnl >= 0;
+    return (
+      <div className={`card p-4 space-y-2.5 card-in ${positive ? 'border-accent-green/20' : 'border-accent-red/20'}`}>
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono">
+            Your short
+          </div>
+          <span className={positive ? 'pill-green' : 'pill-red'}>
+            {positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {positive ? '+' : ''}{fmtPct(pnlPct)}
+          </span>
+        </div>
+        <PosRow k="Size"      v={`${fmtNum(shortQ, 8)} ${coin.symbol} short`} />
+        <PosRow k="Entry"     v={fmtUSD(entry)} />
+        <PosRow k="Mark"      v={fmtUSD(mark)} />
+        <PosRow k="Cover est." v={fmtUSD(liability)} bold />
+        <PosRow
+          k="Unrealized P&L"
+          v={<span className={positive ? 'text-accent-green' : 'text-accent-red'}>
+              {positive ? '+' : ''}{fmtUSD(pnl)}
+            </span>}
+          bold
+        />
+        {holding.openedAt && (
+          <div className="text-[11px] text-white/40 font-mono flex items-center gap-1 pt-1">
+            <Clock size={11} />
+            Opened {formatRelativeTime(holding.openedAt)} · {new Date(holding.openedAt).toLocaleString('en-US', {
+              month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+            })}
+          </div>
+        )}
+        <button
+          onClick={onClose}
+          disabled={closing}
+          className="btn-danger w-full mt-1"
+        >
+          {closing ? 'Closing…' : 'Cover short · market BUY'}
+        </button>
+      </div>
+    );
+  }
+
+  const qty   = longQ;
   const entry = holding.avgBuyPrice;
   const value = qty * mark;
   const pnl   = (mark - entry) * qty;
@@ -526,10 +582,29 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
         </thead>
         <tbody className="divide-y divide-white/5">
           {holdings.map((h) => {
-            const mark = livePrices[h.coinId] ?? h.currentPrice ?? h.avgBuyPrice;
-            const pnl  = (mark - h.avgBuyPrice) * h.quantity;
-            const pct  = h.avgBuyPrice > 0 ? ((mark - h.avgBuyPrice) / h.avgBuyPrice) * 100 : 0;
+            const longQ = h.quantity || 0;
+            const shortQ = h.shortQuantity || 0;
+            const mark =
+              livePrices[h.coinId] ??
+              h.currentPrice ??
+              (longQ > 1e-12 ? h.avgBuyPrice : h.avgShortPrice);
+            const longVal = longQ * mark;
+            const shortLiab = shortQ * mark;
+            const rowValue = longVal - shortLiab;
+            const longCost = longQ * (h.avgBuyPrice || 0);
+            const shortEntry = shortQ * (h.avgShortPrice || 0);
+            const pnl = (longVal - longCost) + (shortEntry - shortLiab);
+            const costExp = longCost + shortEntry;
+            const pct = costExp > 0 ? (pnl / costExp) * 100 : 0;
             const positive = pnl >= 0;
+            const qtyCell =
+              shortQ > 1e-12 && longQ < 1e-12
+                ? `${fmtNum(shortQ, 8)} S`
+                : longQ > 1e-12 && shortQ < 1e-12
+                  ? fmtNum(longQ, 8)
+                  : `${fmtNum(longQ, 8)} / ${fmtNum(shortQ, 8)}S`;
+            const entryCell =
+              shortQ > 1e-12 && longQ < 1e-12 ? fmtUSD(h.avgShortPrice) : fmtUSD(h.avgBuyPrice);
             return (
               <tr
                 key={h.coinId}
@@ -541,10 +616,10 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
                     <span className="text-white/40 text-xs">{h.name}</span>
                   </Link>
                 </td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtNum(h.quantity, 8)}</td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(h.avgBuyPrice)}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{qtyCell}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{entryCell}</td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(mark)}</td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(h.quantity * mark)}</td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">{fmtUSD(rowValue)}</td>
                 <td className={`px-3 py-2.5 text-right font-mono tabular-nums ${positive ? 'text-accent-green' : 'text-accent-red'}`}>
                   {positive ? '+' : ''}{fmtUSD(pnl)} <span className="text-white/40 text-xs">({fmtPct(pct)})</span>
                 </td>

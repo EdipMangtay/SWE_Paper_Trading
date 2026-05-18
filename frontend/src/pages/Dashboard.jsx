@@ -49,15 +49,27 @@ export default function Dashboard() {
     let assetsValue = 0;
     let totalCost   = 0;
     const holdings = (portfolio.holdings || []).map((h) => {
-      const mark = live[h.coinId] ?? h.currentPrice ?? h.avgBuyPrice;
-      const value = h.quantity * mark;
-      const cost = h.quantity * h.avgBuyPrice;
+      const longQ = h.quantity || 0;
+      const shortQ = h.shortQuantity || 0;
+      const mark = live[h.coinId] ?? h.currentPrice ?? (longQ > 1e-12 ? h.avgBuyPrice : h.avgShortPrice);
+      const longVal = longQ * mark;
+      const shortLiab = shortQ * mark;
+      const value = longVal - shortLiab;
+      const longCost = longQ * (h.avgBuyPrice || 0);
+      const shortCost = shortQ * (h.avgShortPrice || 0);
+      const cost = longCost + shortCost;
+      const pnl = (longVal - longCost) + (shortCost - shortLiab);
       assetsValue += value;
       totalCost   += cost;
-      return { ...h, mark, value, pnl: value - cost, pnlPct: cost > 0 ? ((value - cost) / cost) * 100 : 0 };
+      return {
+        ...h, mark, value, pnl, pnlPct: cost > 0 ? (pnl / cost) * 100 : 0,
+        qtyLine: shortQ > 1e-12 && longQ < 1e-12
+          ? `${fmtNum(shortQ, 6)} S`
+          : `${fmtNum(longQ, 6)}`
+      };
     });
     const totalValue  = (portfolio.cashBalance || 0) + assetsValue;
-    const totalPnl    = assetsValue - totalCost;
+    const totalPnl    = holdings.reduce((s, h) => s + h.pnl, 0);
     const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
     return { ...portfolio, holdings, assetsValue, totalValue, totalPnl, totalPnlPct };
   }, [portfolio, live]);
@@ -152,7 +164,7 @@ export default function Dashboard() {
                       <div className="min-w-0">
                         <div className="font-medium truncate">{h.name}</div>
                         <div className="text-xs text-white/45 font-mono">
-                          {h.symbol} · {fmtNum(h.quantity, 6)}
+                          {h.symbol} · {h.qtyLine ?? fmtNum(h.quantity, 6)}
                         </div>
                       </div>
                       <div className="text-right">

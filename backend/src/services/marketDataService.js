@@ -201,6 +201,52 @@ async function binancePrices(symbols) {
 }
 
 /* =========================================================================
+ * CoinGecko price fallback (kicks in when Binance is unreachable/blocked,
+ * e.g. from cloud-provider IPs that Binance geo-restricts).
+ *
+ * Returns { coinId: { price, pct24, volume24 } } for the requested ids.
+ * Batches as many ids as CoinGecko allows in a single request and caches
+ * aggressively because the free tier is rate-limited.
+ * =======================================================================*/
+
+async function geckoSimplePrice(coinIds) {
+  if (!coinIds.length) return {};
+  const ids = [...new Set(coinIds)].filter(Boolean).sort();
+  const key = `cg_simple_${ids.join(',')}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  try {
+    const { data } = await axios.get(`${env.COINGECKO_BASE_URL}/simple/price`, {
+      params: {
+        ids: ids.join(','),
+        vs_currencies: 'usd',
+        include_24hr_change: 'true',
+        include_24hr_vol: 'true'
+      },
+      timeout: 8000
+    });
+    const out = {};
+    for (const id of ids) {
+      const row = data?.[id];
+      if (row && typeof row.usd === 'number') {
+        out[id] = {
+          price: row.usd,
+          pct24: row.usd_24h_change ?? 0,
+          volume24: row.usd_24h_vol ?? null
+        };
+      }
+    }
+    cache.set(key, out, 30);
+    return out;
+  } catch (err) {
+    logger.warn(`CoinGecko simple/price failed (${ids.length} ids): ${err.message}`);
+    // Cache the empty result briefly to avoid hammering when rate-limited.
+    cache.set(key, {}, 15);
+    return {};
+  }
+}
+
+/* =========================================================================
  * CoinGecko meta enrichment (best-effort, non-blocking)
  * =======================================================================*/
 
@@ -250,14 +296,45 @@ const marketDataService = {
     const tickers = await binance24hr(symbols);
     const tMap = new Map(tickers.map((t) => [t.symbol, t]));
 
+    // Detect which coins didn't get a real Binance ticker — usually because
+    // Binance geo-blocks the egress IP (Railway, Vercel, etc.). For those,
+    // fall back to CoinGecko's /simple/price endpoint in one batch call.
+    const missing = slice.filter((c) => {
+      const isStable = c.id === 'tether' || c.id === 'usd-coin' || c.id === 'dai';
+      if (isStable) return false;
+      const bSym = coinIdToBinanceSymbol(c.id, c.symbol);
+      return !bSym || !tMap.has(bSym);
+    });
+    let cgPrices = {};
+    if (missing.length) {
+      cgPrices = await geckoSimplePrice(missing.map((c) => c.id));
+    }
+
     const out = slice.map((c) => {
       const bSym = coinIdToBinanceSymbol(c.id, c.symbol);
       const t = bSym ? tMap.get(bSym) : null;
-      // Stablecoins (USDT itself etc.) — fall back to $1 if no ticker.
       const isStable = c.id === 'tether' || c.id === 'usd-coin' || c.id === 'dai';
-      const price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
-      const pct24 = t ? parseFloat(t.priceChangePercent) : 0;
-      const vol   = t ? parseFloat(t.quoteVolume) : null;
+
+      let price, pct24, vol;
+      if (t) {
+        price = parseFloat(t.lastPrice);
+        pct24 = parseFloat(t.priceChangePercent);
+        vol   = parseFloat(t.quoteVolume);
+      } else if (isStable) {
+        price = 1;
+        pct24 = 0;
+        vol   = null;
+      } else if (cgPrices[c.id]) {
+        const g = cgPrices[c.id];
+        price = g.price;
+        pct24 = g.pct24;
+        vol   = g.volume24;
+      } else {
+        price = null;
+        pct24 = 0;
+        vol   = null;
+      }
+
       return {
         id: c.id,
         symbol: c.symbol,
@@ -266,11 +343,14 @@ const marketDataService = {
         current_price: price,
         price_change_percentage_24h: pct24,
         total_volume: vol,
-        market_cap: null // unknown without CG; UI shows volume instead when null
+        market_cap: null
       };
     });
 
-    cache.set(key, out, 20);
+    // Shorter cache when we couldn't fetch real prices for most coins; longer
+    // cache when the data looks healthy.
+    const healthy = out.filter((c) => c.current_price != null).length;
+    cache.set(key, out, healthy >= out.length / 2 ? 30 : 8);
     return out;
   },
 
@@ -293,26 +373,34 @@ const marketDataService = {
     const t = tickers[0];
 
     const isStable = coinId === 'tether' || coinId === 'usd-coin' || coinId === 'dai';
-    const price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
+    let price = t ? parseFloat(t.lastPrice) : (isStable ? 1 : null);
+    let pct24 = t ? parseFloat(t.priceChangePercent) : 0;
+    let vol   = t ? parseFloat(t.quoteVolume) : null;
+
+    // CoinGecko fallback when Binance didn't give us a live price.
+    if (price == null) {
+      const cg = await geckoSimplePrice([coinId]);
+      if (cg[coinId]) {
+        price = cg[coinId].price;
+        pct24 = cg[coinId].pct24;
+        vol   = cg[coinId].volume24;
+      }
+    }
 
     const result = {
       id: coinId,
       symbol: (curated?.symbol || coinId).toUpperCase(),
       name: curated?.name || coinId,
       image: meta.image || curated?.image || null,
-      // current_price may be null when Binance is throttled AND we have no
-      // last-known fallback yet — UI/orders surface 503 if they need to act.
       current_price: price,
       market_cap: meta.market_cap ?? null,
-      price_change_percentage_24h: t ? parseFloat(t.priceChangePercent) : 0,
+      price_change_percentage_24h: pct24,
       price_change_percentage_7d:  meta.price_change_percentage_7d ?? null,
       price_change_percentage_30d: meta.price_change_percentage_30d ?? null,
-      total_volume: t ? parseFloat(t.quoteVolume) : null,
+      total_volume: vol,
       description: meta.description || ''
     };
 
-    // Cache for longer when we have a real price; for empty/null prices keep
-    // the cache short so we retry sooner on the next request.
     cache.set(key, result, price != null ? 30 : 8);
     return result;
   },
@@ -360,24 +448,41 @@ const marketDataService = {
     const cached = cache.get(key);
     if (cached) return cached;
 
-    // Build (coinId -> binanceSymbol) pairs that we know how to fetch
     const pairs = coinIds.map((id) => {
       const meta = TOP_50.find((c) => c.id === id);
       return { id, sym: coinIdToBinanceSymbol(id, meta?.symbol || '') };
     });
     const symbols = pairs.map((p) => p.sym).filter(Boolean);
-
     const priceBySymbol = await binancePrices(symbols);
 
     const map = {};
+    const missing = [];
     for (const p of pairs) {
       if (p.id === 'tether' || p.id === 'usd-coin' || p.id === 'dai') {
         map[p.id] = priceBySymbol[p.sym] || 1;
+        continue;
+      }
+      const bPrice = priceBySymbol[p.sym];
+      if (bPrice != null && !Number.isNaN(bPrice)) {
+        map[p.id] = bPrice;
       } else {
-        map[p.id] = priceBySymbol[p.sym] ?? null;
+        missing.push(p.id);
       }
     }
-    cache.set(key, map, 8);
+
+    // CoinGecko fallback for any coinId Binance didn't price (typically the
+    // case when running on a cloud IP Binance geo-blocks).
+    if (missing.length) {
+      const cg = await geckoSimplePrice(missing);
+      for (const id of missing) {
+        if (cg[id] && typeof cg[id].price === 'number') map[id] = cg[id].price;
+        else map[id] = null;
+      }
+    }
+
+    // Short cache when most prices are missing, longer when healthy.
+    const healthy = Object.values(map).filter((v) => v != null).length;
+    cache.set(key, map, healthy >= pairs.length / 2 ? 12 : 5);
     return map;
   },
 

@@ -28,7 +28,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, 5_000);
     return () => clearInterval(id);
   }, []);
 

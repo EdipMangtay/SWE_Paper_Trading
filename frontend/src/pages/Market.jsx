@@ -18,7 +18,7 @@ export default function Market() {
     marketApi.prices(50).then((c) => mounted && setCoins(c)).finally(() => mounted && setLoading(false));
     const id = setInterval(() => {
       marketApi.prices(50).then((c) => mounted && setCoins(c));
-    }, 60_000);
+    }, 5_000);
     return () => { mounted = false; clearInterval(id); };
   }, []);
 

@@ -9,7 +9,7 @@ const { WebSocketServer } = require('ws');
 const marketDataService = require('./marketDataService');
 const logger = require('../utils/logger');
 
-const INTERVAL_MS = parseInt(process.env.PRICE_STREAM_INTERVAL_MS || '10000', 10);
+const INTERVAL_MS = parseInt(process.env.PRICE_STREAM_INTERVAL_MS || '5000', 10);
 
 let wss = null;
 let pollTimer = null;
@@ -38,7 +38,7 @@ async function pollOnce() {
   const ids = trackedCoins();
   if (!ids.length) return;
   try {
-    const prices = await marketDataService.getPriceMap(ids);
+    const prices = await marketDataService.getPriceMap(ids, { forStream: true });
     // Keep only fresh, non-null prices so a transient upstream miss never
     // overwrites a previously good value (no UI flicker to "—").
     const fresh = {};

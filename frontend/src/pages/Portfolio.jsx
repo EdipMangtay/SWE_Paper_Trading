@@ -24,7 +24,7 @@ export default function Portfolio() {
         .finally(() => alive && setLoading(false));
     }
     load();
-    const id = window.setInterval(load, 60_000);
+    const id = window.setInterval(load, 5_000);
     return () => { alive = false; window.clearInterval(id); };
   }, []);
 

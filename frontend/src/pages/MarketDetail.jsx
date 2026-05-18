@@ -82,7 +82,7 @@ export default function MarketDetail() {
     const id = window.setInterval(() => {
       loadCoin();
       if (user) loadUserData();
-    }, 60_000);
+    }, 5_000);
     return () => window.clearInterval(id);
   }, [loadCoin, loadUserData, user]);
 

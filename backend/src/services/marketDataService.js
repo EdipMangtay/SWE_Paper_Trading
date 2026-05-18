@@ -446,12 +446,16 @@ const marketDataService = {
   /**
    * Bulk live prices, used by the WebSocket streamer and the limit-order worker.
    * Returns map { coinId: priceUsd }.
+   * @param {{ forStream?: boolean }} [opts]  forStream=true skips read/write cache so each poll can refresh (e.g. every 5s).
    */
-  async getPriceMap(coinIds) {
+  async getPriceMap(coinIds, opts = {}) {
     if (!coinIds.length) return {};
+    const forStream = opts.forStream === true;
     const key = `priceMap_${[...coinIds].sort().join(',')}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
+    if (!forStream) {
+      const cached = cache.get(key);
+      if (cached) return cached;
+    }
 
     const pairs = coinIds.map((id) => {
       const meta = TOP_50.find((c) => c.id === id);
@@ -486,8 +490,11 @@ const marketDataService = {
     }
 
     // Short cache when most prices are missing, longer when healthy.
-    const healthy = Object.values(map).filter((v) => v != null).length;
-    cache.set(key, map, healthy >= pairs.length / 2 ? 12 : 5);
+    // WebSocket polls frequently; do not cache those reads so ticks stay fresh.
+    if (!forStream) {
+      const healthy = Object.values(map).filter((v) => v != null).length;
+      cache.set(key, map, healthy >= pairs.length / 2 ? 12 : 5);
+    }
     return map;
   },
 

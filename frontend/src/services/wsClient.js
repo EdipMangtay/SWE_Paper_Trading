@@ -103,7 +103,7 @@ if (typeof window !== 'undefined') client.connect();
 
 /**
  * useLivePrice(coinId)
- *   returns { price, ts, isLive } — price updates ~ every 10s while connected.
+ *   returns { price, ts, isLive } — price updates ~ every 5s while connected.
  *   Falls back to `initialPrice` until the first WS tick arrives.
  */
 export function useLivePrice(coinId, initialPrice = null) {

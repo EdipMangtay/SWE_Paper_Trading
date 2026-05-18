@@ -17,6 +17,9 @@ const userRepository        = require('../repositories/userRepository');
 const transactionRepository = require('../repositories/transactionRepository');
 const marketDataService     = require('./marketDataService');
 const logger                = require('../utils/logger');
+const {
+  EPS, round2, round8, normalizeAsset, hasExposure, pruneEmptyAssets, defaultCloseSide
+} = require('../utils/positionMath');
 
 function httpError(status, message) {
   const e = new Error(message); e.status = status; return e;
@@ -102,12 +105,20 @@ const orderService = {
     const total = order.quantity * executedPrice;
 
     if (order.side === 'BUY') {
-      if (user.cashBalance < total) {
+      if (user.cashBalance < total - 0.001) {
         await orderRepository.updateStatus(order._id, {
           status: 'CANCELLED',
           cancelledAt: new Date()
         });
-        throw httpError(400, 'Insufficient cash balance');
+        const idx = portfolio.assets.findIndex((a) => a.coinId === order.coinId);
+        const shortOpen = idx >= 0 ? (portfolio.assets[idx].shortQuantity || 0) : 0;
+        const coveringShort = shortOpen > EPS && order.quantity <= shortOpen + EPS;
+        throw httpError(
+          400,
+          coveringShort
+            ? 'Insufficient cash to cover short position'
+            : 'Insufficient cash balance'
+        );
       }
       // Decrement cash
       user.cashBalance = round2(user.cashBalance - total);
@@ -138,7 +149,7 @@ const orderService = {
         const cover = Math.min(remaining, shortQty);
         if (cover > 0) {
           existing.shortQuantity = round8(shortQty - cover);
-          if (existing.shortQuantity <= 1e-12) {
+          if (existing.shortQuantity <= EPS) {
             existing.shortQuantity = 0;
             existing.avgShortPrice = 0;
           }
@@ -147,7 +158,7 @@ const orderService = {
 
         if (remaining > 0) {
           const newLong = longQty + remaining;
-          const newAvg = longQty <= 1e-12
+          const newAvg = longQty <= EPS
             ? executedPrice
             : (existing.avgBuyPrice * longQty + executedPrice * remaining) / newLong;
           existing.quantity = round8(newLong);
@@ -156,10 +167,10 @@ const orderService = {
         }
         existing.lastTradeAt = now;
 
-        if ((existing.quantity || 0) <= 1e-12 && (existing.shortQuantity || 0) <= 1e-12) {
-          portfolio.assets.splice(idx, 1);
-        }
+        normalizeAsset(existing);
+        if (!hasExposure(existing)) portfolio.assets.splice(idx, 1);
       }
+      pruneEmptyAssets(portfolio);
       await portfolioRepository.save(portfolio);
     } else {
       // SELL: close long first; remainder opens / increases paper short.
@@ -183,7 +194,7 @@ const orderService = {
         if (toShort > 0) {
           const prevS = existing.shortQuantity || 0;
           const newS = prevS + toShort;
-          const newAvgShort = prevS <= 1e-12
+          const newAvgShort = prevS <= EPS
             ? executedPrice
             : (existing.avgShortPrice * prevS + executedPrice * toShort) / newS;
           existing.shortQuantity = round8(newS);
@@ -191,9 +202,8 @@ const orderService = {
           if (!existing.openedAt) existing.openedAt = now;
         }
         existing.lastTradeAt = now;
-        if ((existing.quantity || 0) <= 1e-12 && (existing.shortQuantity || 0) <= 1e-12) {
-          portfolio.assets.splice(idx, 1);
-        }
+        normalizeAsset(existing);
+        if (!hasExposure(existing)) portfolio.assets.splice(idx, 1);
       } else {
         portfolio.assets.push({
           symbol: order.symbol,
@@ -210,6 +220,7 @@ const orderService = {
 
       user.cashBalance = round2(user.cashBalance + total);
       await user.save();
+      pruneEmptyAssets(portfolio);
       await portfolioRepository.save(portfolio);
     }
 
@@ -240,47 +251,114 @@ const orderService = {
   },
 
   /**
-   * Close an entire open position at the current market price. Emits a
-   * synthetic MARKET SELL order so the trade history stays consistent.
-   * Returns { order, realizedPnl, realizedPnlPct }.
+   * Close position leg(s) at market.
+   * @param {Object} [options]
+   * @param {'LONG'|'SHORT'|'ALL'} [options.side]  Which leg to close; default auto (ALL if both open).
    */
-  async closePosition(userId, coinId) {
+  async closePosition(userId, coinId, options = {}) {
     if (!coinId) throw httpError(400, 'coinId is required');
+
+    let side = (options.side || '').toUpperCase();
+    if (side && !['LONG', 'SHORT', 'ALL'].includes(side)) {
+      throw httpError(400, 'side must be LONG, SHORT, or ALL');
+    }
 
     const portfolio = await portfolioRepository.findOrCreate(userId);
     const asset = portfolio.assets.find((a) => a.coinId === coinId);
-    const longQty = asset ? (asset.quantity || 0) : 0;
-    const shortQty = asset ? (asset.shortQuantity || 0) : 0;
-    if (!asset || (longQty <= 0 && shortQty <= 0)) {
+    if (!asset || !hasExposure(asset)) {
       throw httpError(404, 'No open position for this asset');
     }
+
+    let { longQty, shortQty } = normalizeAsset(asset);
+    if (!side) side = defaultCloseSide(longQty, shortQty);
+    if (!side) throw httpError(404, 'No open position for this asset');
 
     const coin = await marketDataService.getCoin(coinId);
     const livePrice = await resolveLiveUsdPrice(coinId, coin);
     if (!livePrice) throw httpError(503, 'Live price unavailable');
 
-    if (longQty > 0) {
-      const entryPrice = asset.avgBuyPrice;
-      const order = await orderRepository.create({
-        user: userId,
-        symbol: asset.symbol,
-        coinId: asset.coinId,
-        name: asset.name,
-        type: 'MARKET',
-        side: 'SELL',
-        quantity: longQty,
-        price: livePrice,
-        status: 'PENDING'
-      });
-      const filled = await orderService._executeOrder(order, livePrice);
-      const realizedPnl    = round2((livePrice - entryPrice) * longQty);
-      const realizedPnlPct = entryPrice > 0
-        ? round2(((livePrice - entryPrice) / entryPrice) * 100)
-        : 0;
-      return { order: filled, realizedPnl, realizedPnlPct, entryPrice, exitPrice: livePrice };
+    if (side === 'LONG' && longQty <= EPS) {
+      throw httpError(400, 'No open long position to close');
+    }
+    if (side === 'SHORT' && shortQty <= EPS) {
+      throw httpError(400, 'No open short position to cover');
     }
 
-    const entryPrice = asset.avgShortPrice || 0;
+    if (side === 'ALL') {
+      const longEntry = asset.avgBuyPrice || 0;
+      const shortEntry = asset.avgShortPrice || 0;
+      const exposureCost = longQty * longEntry + shortQty * (shortEntry > EPS ? shortEntry : livePrice);
+
+      let totalPnl = 0;
+      let lastResult = null;
+      if (longQty > EPS) {
+        lastResult = await orderService._closeLongLeg(userId, asset, longQty, livePrice);
+        totalPnl += lastResult.realizedPnl;
+      }
+      const pf2 = await portfolioRepository.findOrCreate(userId);
+      const asset2 = pf2.assets.find((a) => a.coinId === coinId);
+      ({ longQty, shortQty } = asset2 ? normalizeAsset(asset2) : { longQty: 0, shortQty: 0 });
+      if (shortQty > EPS) {
+        if (!asset2) throw httpError(404, 'No open position for this asset');
+        const shortResult = await orderService._closeShortLeg(userId, asset2, shortQty, livePrice);
+        totalPnl = round2(totalPnl + shortResult.realizedPnl);
+        lastResult = shortResult;
+      }
+      const realizedPnlPct = exposureCost > 0
+        ? round2((totalPnl / exposureCost) * 100)
+        : 0;
+      return {
+        order: lastResult?.order,
+        realizedPnl: round2(totalPnl),
+        realizedPnlPct,
+        entryPrice: longEntry || shortEntry || livePrice,
+        exitPrice: livePrice,
+        closedSide: 'ALL'
+      };
+    }
+
+    if (side === 'LONG') {
+      return { ...await orderService._closeLongLeg(userId, asset, longQty, livePrice), closedSide: 'LONG' };
+    }
+
+    return { ...await orderService._closeShortLeg(userId, asset, shortQty, livePrice), closedSide: 'SHORT' };
+  },
+
+  async _closeLongLeg(userId, asset, longQty, livePrice) {
+    const entryPrice = asset.avgBuyPrice || 0;
+    const order = await orderRepository.create({
+      user: userId,
+      symbol: asset.symbol,
+      coinId: asset.coinId,
+      name: asset.name,
+      type: 'MARKET',
+      side: 'SELL',
+      quantity: longQty,
+      price: livePrice,
+      status: 'PENDING'
+    });
+    const filled = await orderService._executeOrder(order, livePrice);
+    const realizedPnl = round2((livePrice - entryPrice) * longQty);
+    const realizedPnlPct = entryPrice > 0
+      ? round2(((livePrice - entryPrice) / entryPrice) * 100)
+      : 0;
+    return {
+      order: filled,
+      realizedPnl,
+      realizedPnlPct,
+      entryPrice,
+      exitPrice: livePrice,
+      closedQty: longQty
+    };
+  },
+
+  async _closeShortLeg(userId, asset, shortQty, livePrice) {
+    let entryPrice = asset.avgShortPrice || 0;
+    if (entryPrice <= EPS) {
+      logger.warn(`Short ${asset.symbol} missing avgShortPrice; using mark $${livePrice} for P&L`);
+      entryPrice = livePrice;
+      asset.avgShortPrice = livePrice;
+    }
     const order = await orderRepository.create({
       user: userId,
       symbol: asset.symbol,
@@ -293,11 +371,18 @@ const orderService = {
       status: 'PENDING'
     });
     const filled = await orderService._executeOrder(order, livePrice);
-    const realizedPnl    = round2((entryPrice - livePrice) * shortQty);
+    const realizedPnl = round2((entryPrice - livePrice) * shortQty);
     const realizedPnlPct = entryPrice > 0
       ? round2(((entryPrice - livePrice) / entryPrice) * 100)
       : 0;
-    return { order: filled, realizedPnl, realizedPnlPct, entryPrice, exitPrice: livePrice };
+    return {
+      order: filled,
+      realizedPnl,
+      realizedPnlPct,
+      entryPrice,
+      exitPrice: livePrice,
+      closedQty: shortQty
+    };
   },
 
   async cancelOrder(userId, orderId) {
@@ -355,8 +440,5 @@ const orderService = {
     return { checked: pendings.length, filled, expired };
   }
 };
-
-function round2(x) { return Math.round(x * 100) / 100; }
-function round8(x) { return Math.round(x * 1e8) / 1e8; }
 
 module.exports = orderService;

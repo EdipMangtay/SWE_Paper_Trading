@@ -23,6 +23,7 @@ import { coinIdToTradingViewSymbol } from '../utils/tradingViewSymbol.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useLivePrice, useLivePrices } from '../services/wsClient.js';
+import { hasLong, hasShort } from '../utils/position.js';
 
 const INTERVALS = [
   { label: '15m', value: '15' },
@@ -116,18 +117,22 @@ export default function MarketDetail() {
     }
   }
 
-  async function closePosition(coin_) {
+  async function closePosition(coin_, side) {
     if (!coin_?.coinId) return;
     const longQ = coin_.quantity || 0;
     const shortQ = coin_.shortQuantity || 0;
+    const closeSide = side
+      || (hasLong(coin_) && hasShort(coin_) ? 'ALL' : hasShort(coin_) ? 'SHORT' : 'LONG');
     const msg =
-      longQ > 1e-12
-        ? `Close long ${fmtNum(longQ, 8)} ${coin_.symbol} at market?`
-        : `Cover short ${fmtNum(shortQ, 8)} ${coin_.symbol} at market?`;
+      closeSide === 'ALL'
+        ? `Close all ${coin_.symbol} positions (long + short) at market?`
+        : closeSide === 'SHORT'
+          ? `Cover short ${fmtNum(shortQ, 8)} ${coin_.symbol} at market?`
+          : `Close long ${fmtNum(longQ, 8)} ${coin_.symbol} at market?`;
     if (!window.confirm(msg)) return;
     setClosing(coin_.coinId);
     try {
-      const res = await orderApi.close(coin_.coinId);
+      const res = await orderApi.close(coin_.coinId, closeSide);
       const sign = res.realizedPnl >= 0 ? '+' : '';
       toast.success(
         `Closed ${coin_.symbol} · realized ${sign}${fmtUSD(res.realizedPnl)} (${fmtPct(res.realizedPnlPct)})`,
@@ -280,7 +285,7 @@ export default function MarketDetail() {
             mark={priceForDisplay}
             authed={!!user}
             closing={closing === coinId}
-            onClose={() => holding && closePosition(holding)}
+            onClose={(side) => holding && closePosition(holding, side)}
           />
           <AboutCard coin={coin} />
         </aside>
@@ -438,7 +443,57 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
   const longQ  = holding.quantity || 0;
   const shortQ = holding.shortQuantity || 0;
 
-  if (shortQ > 1e-12 && longQ < 1e-12) {
+  if (hasLong(holding) && hasShort(holding)) {
+    const longEntry = holding.avgBuyPrice || 0;
+    const shortEntry = holding.avgShortPrice || 0;
+    const longPnl = (mark - longEntry) * longQ;
+    const shortPnl = (shortEntry - mark) * shortQ;
+    const totalPnl = longPnl + shortPnl;
+    const positive = totalPnl >= 0;
+    return (
+      <div className={`card p-4 space-y-3 card-in ${positive ? 'border-accent-green/20' : 'border-accent-red/20'}`}>
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35 font-mono">
+          Mixed position · {coin.symbol}
+        </div>
+        <PosRow k="Long" v={`${fmtNum(longQ, 8)} @ ${fmtUSD(longEntry)}`} />
+        <PosRow k="Short" v={`${fmtNum(shortQ, 8)} @ ${fmtUSD(shortEntry)}`} />
+        <PosRow k="Mark" v={fmtUSD(mark)} />
+        <PosRow
+          k="Unrealized P&L"
+          v={<span className={positive ? 'text-accent-green' : 'text-accent-red'}>
+              {positive ? '+' : ''}{fmtUSD(totalPnl)}
+            </span>}
+          bold
+        />
+        <button
+          type="button"
+          onClick={() => onClose('SHORT')}
+          disabled={closing}
+          className="btn-danger w-full text-xs"
+        >
+          {closing ? 'Closing…' : 'Cover short · market BUY'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onClose('LONG')}
+          disabled={closing}
+          className="btn-ghost w-full text-xs border border-white/10"
+        >
+          Close long · market SELL
+        </button>
+        <button
+          type="button"
+          onClick={() => onClose('ALL')}
+          disabled={closing}
+          className="btn-ghost w-full text-xs text-white/55"
+        >
+          Close all legs
+        </button>
+      </div>
+    );
+  }
+
+  if (hasShort(holding) && !hasLong(holding)) {
     const entry = holding.avgShortPrice || 0;
     const liability = shortQ * mark;
     const pnl   = (entry - mark) * shortQ;
@@ -475,7 +530,7 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
           </div>
         )}
         <button
-          onClick={onClose}
+          onClick={() => onClose('SHORT')}
           disabled={closing}
           className="btn-danger w-full mt-1"
         >
@@ -526,7 +581,7 @@ function PositionCard({ coin, holding, mark, authed, closing, onClose }) {
       )}
 
       <button
-        onClick={onClose}
+        onClick={() => onClose('LONG')}
         disabled={closing}
         className="btn-danger w-full mt-1"
       >
@@ -634,13 +689,37 @@ function PositionsTable({ holdings, livePrices, currentCoinId, onClose, closingI
                   ) : '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right">
-                  <button
-                    onClick={() => onClose(h)}
-                    disabled={closingId === h.coinId}
-                    className="btn-danger text-xs px-3 py-1"
-                  >
-                    {closingId === h.coinId ? '…' : 'Close'}
-                  </button>
+                  <div className="flex flex-col gap-1 items-end">
+                    {hasShort(h) && hasLong(h) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onClose(h, 'SHORT')}
+                          disabled={closingId === h.coinId}
+                          className="btn-danger text-xs px-2 py-1"
+                        >
+                          {closingId === h.coinId ? '…' : 'Cover short'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onClose(h, 'LONG')}
+                          disabled={closingId === h.coinId}
+                          className="btn-ghost text-xs px-2 py-1"
+                        >
+                          Close long
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onClose(h, hasShort(h) ? 'SHORT' : 'LONG')}
+                        disabled={closingId === h.coinId}
+                        className="btn-danger text-xs px-3 py-1"
+                      >
+                        {closingId === h.coinId ? '…' : (hasShort(h) ? 'Cover' : 'Close')}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );

@@ -209,6 +209,36 @@ describe('POST /api/orders/close — close position at market', () => {
     expect(pf.body.holdings).toHaveLength(0);
   });
 
+  it('closes only the SHORT leg when side=SHORT is sent explicitly', async () => {
+    const { token } = await registerUser();
+    await request(app).post('/api/orders').set(auth(token))
+      .send({ coinId: 'bitcoin', type: 'MARKET', side: 'SELL', quantity: 0.25 });
+
+    const closed = await request(app).post('/api/orders/close').set(auth(token))
+      .send({ coinId: 'bitcoin', side: 'SHORT' });
+
+    expect(closed.status).toBe(201);
+    expect(closed.body.closedSide).toBe('SHORT');
+    expect(closed.body.realizedPnl).toBe(0); // flat at entry when mark equals entry
+
+    const pf = await request(app).get('/api/portfolio').set(auth(token));
+    expect(pf.body.holdings).toHaveLength(0);
+  });
+
+  it('auto-detects SHORT close (no side) for a short-only position', async () => {
+    const { token } = await registerUser();
+    await request(app).post('/api/orders').set(auth(token))
+      .send({ coinId: 'ethereum', type: 'MARKET', side: 'SELL', quantity: 1 });
+
+    const closed = await request(app).post('/api/orders/close').set(auth(token))
+      .send({ coinId: 'ethereum' });
+
+    expect(closed.status).toBe(201);
+    expect(closed.body.closedSide).toBe('SHORT');
+    const pf = await request(app).get('/api/portfolio').set(auth(token));
+    expect(pf.body.holdings).toHaveLength(0);
+  });
+
   it('returns 404 when there is no open position to close', async () => {
     const { token } = await registerUser();
     const res = await request(app).post('/api/orders/close').set(auth(token))

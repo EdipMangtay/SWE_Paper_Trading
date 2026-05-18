@@ -17,7 +17,10 @@ const portfolioRepository = {
     return pf;
   },
 
-  save: (portfolio) => portfolio.save(),
+  save: (portfolio) => {
+    portfolio.markModified('assets');
+    return portfolio.save();
+  },
 
   listAll: () => Portfolio.find().populate('user', 'username email cashBalance')
 };

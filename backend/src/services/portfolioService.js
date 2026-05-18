@@ -5,6 +5,7 @@ const portfolioRepository   = require('../repositories/portfolioRepository');
 const userRepository        = require('../repositories/userRepository');
 const transactionRepository = require('../repositories/transactionRepository');
 const marketDataService     = require('./marketDataService');
+const { EPS }               = require('../utils/positionMath');
 
 const portfolioService = {
   async getPortfolio(userId) {
@@ -22,11 +23,13 @@ const portfolioService = {
       .map((a) => {
         const longQty = a.quantity || 0;
         const shortQty = a.shortQuantity || 0;
+        const hasLong = longQty > EPS;
+        const hasShort = shortQty > EPS;
         const cp = priceMap[a.coinId];
         const currentPrice =
           cp != null && !Number.isNaN(cp)
             ? cp
-            : (longQty > 0 ? a.avgBuyPrice : (shortQty > 0 ? (a.avgShortPrice || 0) : a.avgBuyPrice));
+            : (hasLong ? a.avgBuyPrice : (hasShort ? (a.avgShortPrice || 0) : a.avgBuyPrice));
 
         const longValue = longQty * currentPrice;
         const shortLiab = shortQty * currentPrice;
@@ -55,11 +58,12 @@ const portfolioService = {
           pnlPct,
           pnlLong,
           pnlShort,
+          positionSide: hasLong && hasShort ? 'MIXED' : hasShort ? 'SHORT' : 'LONG',
           openedAt:    a.openedAt    || a.lastTradeAt || null,
           lastTradeAt: a.lastTradeAt || a.openedAt   || null
         };
       })
-      .filter((h) => h.quantity > 1e-12 || h.shortQuantity > 1e-12);
+      .filter((h) => h.quantity > EPS || h.shortQuantity > EPS);
 
     const totalValue = user.cashBalance + assetsValue;
     // Use process.env directly to avoid a circular import

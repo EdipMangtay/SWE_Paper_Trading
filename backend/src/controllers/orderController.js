@@ -26,7 +26,9 @@ const orderController = {
 
   async closePosition(req, res, next) {
     try {
-      const result = await orderService.closePosition(req.user.id, req.body.coinId);
+      const result = await orderService.closePosition(req.user.id, req.body.coinId, {
+        side: req.body.side
+      });
       res.status(201).json(result);
     } catch (err) { next(err); }
   }
